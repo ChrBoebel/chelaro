@@ -7,9 +7,11 @@
   "private": true,
   "type": "module",
   "main": "src/main.mjs",
+  "icon": "assets/icon.png",
   "scripts": {
     "build:runtime": "pnpm --dir ../.. prepare:desktop-runtime",
-    "check": "node --check src/main.mjs && node --check src/runtime.mjs && node --check src/external-links.mjs && node --check src/loading-page.mjs && node --check src/finance-assistant-e2e.mjs && node --check src/preload.cjs && node --check scripts/run-finance-assistant-e2e.mjs && node --test test/*.test.mjs",
+    "capture:docs": "env -u ELECTRON_RUN_AS_NODE electron scripts/capture-docs.mjs",
+    "check": "node --check src/main.mjs && node --check src/runtime.mjs && node --check src/external-links.mjs && node --check src/loading-page.mjs && node --check src/finance-assistant-e2e.mjs && node --check src/preload.cjs && node --check scripts/capture-docs.mjs && node --check scripts/run-finance-assistant-e2e.mjs && node --test test/*.test.mjs",
     "e2e:finance-assistant": "node scripts/run-finance-assistant-e2e.mjs",
     "dev": "electron .",
     "package:mac": "pnpm build:runtime && electron-builder --config electron-builder.config.cjs --mac dmg zip --arm64",

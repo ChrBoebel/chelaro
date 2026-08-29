@@ -3,15 +3,15 @@
 The roadmap describes outcomes, not promises or fixed delivery dates. Data integrity and recovery
 work take priority over feature breadth.
 
-## Now — Private Preview und Source-available-Vorbereitung
+## Now — Public Source Preview
 
-- restore reliable GitHub Actions execution and required checks;
-- obtain final legal review of the software, commercial, contribution, and brand-asset terms;
-- complete repository sanitization before changing GitHub visibility;
-- configure the protected macOS release environment and publish the first signed, notarized build;
-- complete a synthetic-data product demo and release evidence;
+- maintain the explicit source-available, not Open Source, and not-production-ready boundary;
+- keep the Codex-assisted visual-asset provenance, hashes, synthetic-data evidence, and usage terms
+  current when assets change;
+- obtain final legal review of the software, commercial, contribution, and brand-asset terms before
+  commercial licensing or a larger product launch;
 - document and test manual backup and restore before real-data use;
-- finish secure local credential storage for future banking connections.
+- finish secure local credential storage for future banking connections;
 - integrate the fail-closed Agent Host foundation into the desktop review flow without exposing
   canonical finance data or the live checkout.
 
@@ -44,7 +44,7 @@ work take priority over feature breadth.
 
 ## Release gates
 
-A public beta requires:
+A future public binary beta requires a separate release decision and:
 
 1. green mandatory CI on `main`;
 2. a signed and notarized macOS release with verified update delivery;

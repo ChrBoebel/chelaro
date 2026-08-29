@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/brand/github-social-preview.png" width="100%" alt="Chelaro – Jede Zahl. Belegt." />
+</p>
+
 <h1 align="center">Chelaro</h1>
 
 <p align="center"><strong>Jede Zahl. Belegt.</strong></p>
@@ -7,7 +11,7 @@
   ohne Kontrolle über ihre Daten und Entscheidungen abzugeben.
 </p>
 
-<p align="center"><em>Öffentliche Code-only Source Preview · nicht produktionsreif · keine Downloads oder Releases · German-first</em></p>
+<p align="center"><em>Öffentliche Source Preview · nicht produktionsreif · keine Downloads oder Releases · German-first</em></p>
 
 <p align="center">
   <a href="#aktueller-stand">Produkt</a> ·
@@ -30,12 +34,31 @@ Finanzdaten entstehen erst durch deterministische Validierung oder eine bewusste
 > schriftliche Lizenz. Das Repository ist **source-available und nicht Open Source**. Es gibt keine
 > offiziellen Downloads, signierten Builds, Releases, Support- oder Produktionszusagen.
 
-## Code-only Preview
+## Produktansicht
 
-Die öffentliche Kopie enthält bewusst keine Logos, App-Icons, Social-Preview-Grafiken,
-Produkt-Screenshots oder proprietäre Markenunterlagen. Die Oberfläche verwendet deshalb eine
-textbasierte Kennzeichnung. Visuelle Assets bleiben bis zur Klärung ihrer vollständigen
-Rechtekette ausschließlich in der privaten Entwicklungsumgebung.
+Alle gezeigten Namen, Dokumente, Rechnungsnummern und Beträge sind synthetische
+Demonstrationsdaten. Logo, Hero und Screenshots wurden in Christopher Böbels Codex-Agent-Workflow
+erstellt; Herkunft, Hashes und Nutzungsgrenzen stehen im
+[Asset-Herkunftsregister](ASSET_PROVENANCE.md).
+
+<p align="center">
+  <img src="docs/assets/screenshots/overview.png" width="100%" alt="Chelaro Finanzüberblick mit synthetischen Daten" />
+</p>
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/assets/screenshots/documents.png" alt="Chelaro Dokumentenarchiv mit synthetischen Belegen" />
+    </td>
+    <td width="50%">
+      <img src="docs/assets/screenshots/workbook.png" alt="Chelaro Rechnungs-Workbook mit synthetischen Daten" />
+    </td>
+  </tr>
+  <tr>
+    <td><sub>Unveränderte Originale mit Content Hash</sub></td>
+    <td><sub>Versionierte Rechnungsarbeit mit sichtbarer Quelle</sub></td>
+  </tr>
+</table>
 
 ## Warum Chelaro
 
@@ -240,9 +263,9 @@ Der Chelaro-Quellcode ist **source-available** unter der
 Weitergabe sind innerhalb der Lizenzbedingungen erlaubt. Kommerzielle Nutzung ist nicht umfasst
 und erfordert vorab eine [separate schriftliche Lizenz](COMMERCIAL-LICENSE.md).
 
-Die Marke Chelaro ist von der Softwarelizenz ausgenommen. Die öffentliche Source Preview enthält
-keine Logos, Icons, Screenshots oder proprietären Markenunterlagen. Es gilt die gesonderte
-[Markenrichtlinie](BRAND_ASSETS.md). Drittanbieterkomponenten behalten ihre eigenen Lizenzen;
+Die Marke Chelaro und die enthaltenen visuellen Assets sind von der Softwarelizenz ausgenommen.
+Für ihre Anzeige im Zusammenhang mit Chelaro gilt die gesonderte
+[Marken- und Assetrichtlinie](BRAND_ASSETS.md). Drittanbieterkomponenten behalten ihre eigenen Lizenzen;
 relevante Hinweise stehen in den [Drittanbieterhinweisen](THIRD_PARTY_NOTICES.md).
 
 Dieses Modell ist bewusst keine OSI-anerkannte Open-Source-Lizenz, weil es kommerzielle Nutzung
@@ -251,7 +274,7 @@ einschränkt.
 ## Entwicklungsstatus
 
 Chelaro ist experimentelle Finanzsoftware in aktiver Entwicklung. Der öffentliche Stand ist eine
-Code-only Source Preview und weder fertige noch produktionsreife Finanzsoftware. Er ist keine
+Source Preview und weder fertige noch produktionsreife Finanzsoftware. Er ist keine
 Steuer-, Rechts- oder Anlageberatung und darf nicht als einzige Aufbewahrung realer Dokumente oder
 als Grundlage kritischer Finanzentscheidungen verwendet werden.
 

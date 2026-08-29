@@ -6,13 +6,14 @@ Status target for the public Source Preview: 29 August 2026
 
 | Setting | Current state |
 | --- | --- |
-| Visibility | Public, code-only Source Preview |
+| Visibility | Public Source Preview |
 | Default branch | `main` |
 | Merge strategy | Squash merge only |
 | Head branches | Deleted automatically after merge |
 | Update branch button | Enabled |
 | Auto-merge | Not required for the Source Preview |
-| Issues and Projects | Enabled |
+| Issues | Enabled |
+| Projects | Disabled initially |
 | Discussions | Disabled initially |
 | Releases | None; no signed downloads or binary artifacts |
 | Dependabot alerts | Use the capabilities available on the public repository |
@@ -36,13 +37,14 @@ environments, or paid GitHub features and makes no remote-CI availability promis
   plan instead of automatic merge.
 
 Repository rules may be evaluated later. They are not a prerequisite or implied guarantee of this
-code-only Preview.
+Source Preview.
 
 ## Visual repository settings
 
-The public code-only Source Preview intentionally has no social-preview image, logo, app icon, or
-product screenshot. Do not upload an image through the GitHub repository settings until its full
-origin and rights chain have been documented and the public asset register has been updated.
+The public Source Preview includes the documented Chelaro logo, app icons, README Hero and three
+synthetic-data product screenshots. Their Codex-assisted origin, hashes, visible contents,
+metadata findings and usage boundary are recorded in `ASSET_PROVENANCE.md`. Any replacement or
+additional visual file requires the same review before publication.
 
 The repository homepage remains empty until an approved Chelaro domain exists and the trademark
 launch gates in the Brand Platform have been completed. Do not publish a temporary URL that implies

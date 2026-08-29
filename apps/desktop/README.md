@@ -32,8 +32,10 @@ pnpm quality:desktop
 pnpm release:check
 ```
 
-Die öffentliche Source Preview enthält keine Produkt-Screenshots, App-Icons oder veröffentlichten
-Binärpakete. Die Electron-Shell verwendet bei lokaler Ausführung das Plattform-Standardicon.
+Die öffentliche Source Preview enthält das dokumentierte Chelaro-App-Icon und drei Screenshots mit
+synthetischen Daten, aber keine veröffentlichten Binärpakete. Screenshots werden über
+`pnpm --filter desktop capture:docs` erzeugt; der Capture verlangt eine Loopback-URL und die
+ausdrückliche Bestätigung synthetischer Daten.
 
 Weitere Details: [Release-Prozess](../../docs/releases/RELEASE_PROCESS.md) ·
 [Architektur](../../docs/architecture/ARCHITECTURE.md)

@@ -23,7 +23,9 @@ for required_file in \
   CHANGELOG.md \
   SECURITY.md \
   docs/releases/RELEASE_PROCESS.md \
-  "docs/releases/$expected_tag.md"; do
+  "docs/releases/$expected_tag.md" \
+  apps/desktop/assets/icon.icns \
+  apps/desktop/assets/icon.png; do
   if [[ ! -f "$required_file" ]]; then
     echo "Required release file is missing: $required_file" >&2
     exit 1

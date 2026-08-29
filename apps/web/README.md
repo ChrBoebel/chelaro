@@ -30,7 +30,8 @@ Gemeinsame UI-Primitives liegen unter `src/components/ui`. Öffentliche Produkto
 die Funktion „KI“; konkrete Anbieter- oder Agentennamen erscheinen nur dort, wo technische oder
 Einwilligungstransparenz sie erfordert.
 
-Die Source Preview verwendet ausschließlich eine text- und CSS-basierte Wort-/Buchstabenmarke;
-Logo- und Bilddateien sind nicht enthalten.
+Die Source Preview verwendet das dokumentierte Chelaro-Abakus-Schildkröten-Logo aus
+`public/brand/chelaro-icon.svg`. Herkunft und Nutzungsgrenzen stehen im
+[Asset-Herkunftsregister](../../ASSET_PROVENANCE.md).
 
 Weitere Details: [Architektur](../../docs/architecture/ARCHITECTURE.md)

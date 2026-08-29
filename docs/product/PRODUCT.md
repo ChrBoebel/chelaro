@@ -14,7 +14,7 @@ finances, and receiving proposal-only help from a conversational finance assista
 - **Audience:** personal finances first; freelancer and business workflows are later profiles.
 - **AI policy:** deterministic and local processing works without an external model. External AI providers are disabled by default and require explicit per-provider consent.
 - **Language:** German first, internationalization-ready.
-- **Repository:** public code-only Source Preview named `chelaro`; private development history and
+- **Repository:** public Source Preview named `chelaro`; private development history and
   internal material remain in a separate owner-controlled repository.
 
 ## Release gates

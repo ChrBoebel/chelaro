@@ -15,7 +15,7 @@
 - Dependency, build, cache, virtual-environment, and coverage directories
 - Local environment files such as `.env` and `.env.local`; the two tracked `.env.example`
   templates contain placeholders only and remain part of the export
-- Nine image and icon files whose public rights chain was not fully attested
+- Nine image and icon files whose public provenance had not yet been supplied at initial export
 - Six internal brand and design documents that described the excluded visual identity
 - Three image-specific support files: screenshot capture, icon generation, and the removed asset test
 - No owner attestations or asset-provenance confirmations were invented during this export
@@ -23,7 +23,7 @@
 ## Licensing retained
 
 - Software: existing PolyForm Noncommercial License 1.0.0 terms in `LICENSE.md`
-- Name and trademark policy: separate terms in `BRAND_ASSETS.md`; no visual brand assets are included
+- Name, trademark and visual-asset policy: separate terms in `BRAND_ASSETS.md`
 - This export does not replace, broaden, or reinterpret either set of terms
 
 ## Initial repository identity
@@ -34,6 +34,14 @@
 
 ## Publication status
 
-- Prepared as a code-only public Source Preview
+- Initially prepared as a code-only public Source Preview
 - Publication is permitted only after the final sanitization gate passes
 - No binary release, signed download, or update artifact is part of this snapshot
+
+## Subsequent asset decision
+
+After the initial public root commit, the owner confirmed that the nine excluded visual files were
+created through his Codex-agent workflow and explicitly approved their public inclusion. They are
+introduced only through a later reviewed pull request, not retroactively inserted into the clean
+root commit. Current provenance, hashes and residual warnings are documented in
+`ASSET_PROVENANCE.md` and `SANITIZATION_REPORT.md`.
