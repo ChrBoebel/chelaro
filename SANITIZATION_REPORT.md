@@ -4,7 +4,7 @@
 
 **PASS WITH WARNINGS — technisch für die öffentliche Source Preview mit den dokumentierten visuellen Assets geeignet.**
 
-Prüfzeitpunkt: 2026-08-29T05:07:57Z (UTC)
+Prüfzeitpunkt: 2026-08-29T05:23:24Z (UTC)
 
 Es wurden keine veröffentlichungsblockierenden Secrets, personenbezogenen Daten, privaten
 Benutzerpfade, vertraulichen internen Referenzen, gefährlichen Dateien oder echten Finanzdaten
@@ -16,7 +16,8 @@ späteren vollständigen juristischen Abhängigkeitscheck vor einer etwaigen Bin
 ## Umfang und Methode
 
 - Current Tree mit 1.234 getrackten Dateien;
-- vollständige erreichbare Historie mit zwei Commits und genau einem Root-Commit;
+- vollständige erreichbare Historie mit drei Commits und genau einem Root-Commit nach dem
+  separaten Abschlusscommit dieses Berichts;
 - Dateinamen, Dateimodi, Textinhalte und alle erreichbaren Git-Blobs;
 - alle neun visuellen Dateien mit `file`, SHA-256, ImageMagick `identify`, macOS `sips`,
   `strings`, Tesseract OCR und manueller Sichtprüfung;
@@ -40,14 +41,18 @@ tesseract <Rasterdateien> stdout
 git diff --check
 git fsck --full --no-reflogs --unreachable
 pnpm check:safety
+pnpm quality
 pnpm infra:config
+pnpm release:check
+pnpm quality:agent:macos
 pnpm check:codex-schema
 pnpm --filter desktop check
 ```
 
 ## 1. Secrets und Credentials — PASS WITH WARNINGS
 
-- Gitleaks 8.30.1 scannte beide erreichbaren Commits und rund 5,2 MB Git-Inhalt.
+- Gitleaks 8.30.1 scannte nach dem separaten Abschlusscommit alle drei erreichbaren Commits und
+  rund 5,2 MB Git-Inhalt.
 - Gitleaks meldete acht Treffer, alle bereits im öffentlichen Root-Commit und alle manuell als
   synthetisch klassifiziert: zwei UUID-Testwerte für Idempotenz, eine technische Beschreibung des
   Begriffs `idempotency key` und fünf ausdrücklich synthetische Capability-Strings in Desktoptests.
@@ -62,7 +67,7 @@ pnpm --filter desktop check
 ## 2. PII, private Pfade und Finanzdaten — PASS
 
 - Absolute private Benutzerpfade für macOS, Linux und Windows: **0 Treffer** im Current Tree und
-  in beiden erreichbaren Commits.
+  in allen drei erreichbaren Commits.
 - IBAN-ähnliche Werte, private IPv4-Adressen sowie echte Kunden-, Konto- oder Dokumentdaten:
   **0 Treffer**.
 - Zulässige öffentliche Identität: Christopher Böbel und
@@ -84,6 +89,10 @@ pnpm --filter desktop check
 - Zwei veraltete Statusaussagen wurden vor Abschluss korrigiert: Die Architektur nennt nun die
   öffentliche, source-available und nicht offene Preview; der historische Produkt-Blueprint
   erwartet `PUBLIC` und setzt keine kostenpflichtigen GitHub-Funktionen voraus.
+- Der abschließende Konsistenzscan bestätigt zusätzlich: `ROADMAP.md` trennt die aktuelle Public
+  Source Preview von einer erst künftig separat zu entscheidenden Binär-Beta; die Web-Metadaten
+  verwenden „lokal“ statt „offen“; `REPOSITORY.md` und `PUBLIC_RELEASE_REVIEW.md` nennen den
+  tatsächlichen Assetumfang, keine kostenpflichtigen GitHub-Garantien und keine Releases.
 - Markdown-Linkprüfung über 45 getrackte Markdowndateien: **0 fehlende lokale Ziele**.
 - Assetlinks im README, in den Teilprojekt-READMEs und in den Richtlinien zeigen auf vorhandene,
   geprüfte Dateien.
@@ -100,14 +109,20 @@ pnpm --filter desktop check
   `FINANCE_OS_DOCS_SYNTHETIC_DATA_CONFIRMED=1`, beschränkt die Ausgabe auf
   `docs/assets/screenshots/` und startet Electron mit Context Isolation, deaktiviertem
   Node-Integration-Zugriff und Sandbox.
-- `pnpm check:safety`, `pnpm infra:config`, `pnpm check:codex-schema`, der vollständige
-  Desktop-Check mit 21 Tests und `git diff --check`: **PASS**.
+- Vollständiges Gate dieses Turns: `pnpm quality` **PASS**, `pnpm infra:config` **PASS**,
+  `pnpm release:check` **PASS** und `pnpm quality:agent:macos` **PASS** mit 103 bestandenen
+  Agent-Host-Tests. Darin bzw. ergänzend bestanden Repository-Safety, API-/Web-/Desktop-Linting,
+  Typprüfungen, Tests, Builds, Dependency-Audits, Codex-Schema-Prüfung und der Desktop-Check mit
+  21 Tests. `git diff --check`: **PASS**.
 
 ## 5. Konfiguration, Lizenz und Rechtekette — PASS WITH WARNINGS
 
 - PolyForm Noncommercial License 1.0.0, separate kommerzielle Lizenzinformation,
   Contribution-/Security-Dokumentation, Drittanbieterhinweise und Apache-2.0-Lizenztext sind
   vorhanden.
+- `THIRD_PARTY_NOTICES.md` dokumentiert nun auch Geist Sans und Geist Mono, ihren Einsatz über
+  `next/font`, das Erscheinen gerenderter Schriftzeichen in den Screenshots und die SIL Open Font
+  License 1.1; im Repository werden keine Geist-Schriftdateien geführt.
 - README und Betriebsdokumentation bezeichnen das Repository ausdrücklich als
   **source-available und nicht Open Source**, nicht produktionsreif und ohne Downloads,
   signierte Builds, Updatekanal oder GitHub Releases.
@@ -161,16 +176,18 @@ Alle Werte stimmen exakt mit `ASSET_PROVENANCE.md` überein:
 
 ## Git-Historie und Abschlussgate — PASS
 
-- Erreichbare Historie: genau zwei Commits, davon genau ein Root-Commit; der Asset-Feature-Commit
-  hat ausschließlich den öffentlichen Root-Commit als Parent.
-- Author und Committer des Feature-Commits: `Christopher Böbel <ChrBoebel@users.noreply.github.com>`.
-- Branch `feat/restore-public-brand-assets`; lokaler Arbeitsbaum nach Amend sauber; **0 Tags**.
+- Erreichbare Historie nach diesem Bericht: genau drei Commits und genau ein Root-Commit. Der
+  Asset-Feature-Commit `80d5149746eb0adbe81d7efa5bf695c0e26b8f09` hat ausschließlich den
+  öffentlichen Root-Commit als Parent; der separate Abschlusscommit ändert nur diesen Bericht.
+- Author und Committer aller drei Commits: `Christopher Böbel <ChrBoebel@users.noreply.github.com>`.
+- Branch `feat/restore-public-brand-assets`; sauberer Arbeitsbaum nach separatem Report-Commit;
+  **0 Tags**.
 - `origin` zeigt auf das bereits öffentliche Repository `ChrBoebel/chelaro`; die Remote wurde
   nicht verändert.
-- `git fsck --full`: keine fehlenden oder beschädigten Objekte. Ein durch das verlangte Amend
-  lokal unerreichbar werdender Vorgänger enthält denselben geprüften Assetstand und wird durch
-  einen normalen Branch-Push nicht übertragen. Auftragsgemäß wurde weder Git-GC noch eine
-  Umschreibung des öffentlichen Root-Commits vorgenommen.
+- Nach der vorausgegangenen Bereinigung meldete
+  `git fsck --full --no-reflogs --unreachable` **0 fehlende, beschädigte oder unerreichbare
+  Objekte**. Der separate Abschlusscommit erzeugt keinen unerreichbaren Vorgänger; weder Root- noch
+  Asset-Commit wurden umgeschrieben.
 
 ## Freigabegrenze
 
