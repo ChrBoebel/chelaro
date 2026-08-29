@@ -2,6 +2,22 @@
 
 Status target for the public Source Preview: 29 August 2026
 
+## Source of truth
+
+This public repository is Chelaro's only active codebase. All new work starts from its `main`
+branch, uses a short-lived branch, and returns through a focused pull request. There is no active
+private code mirror and no bidirectional repository synchronization.
+
+The earlier private development history is retained as a read-only archive. Never merge, rebase,
+or graft that history into this sanitized public history. If an old implementation detail must be
+recovered, transfer only the smallest reviewed patch and run the current security and quality gates
+before committing it here.
+
+Internal market research, pricing hypotheses, legal assessments, and private planning belong in the
+owner's knowledge vault rather than a shadow code repository. Product behavior, public decisions,
+architecture, security boundaries, and contributor guidance remain documented here next to the
+code.
+
 ## GitHub configuration
 
 | Setting | Current state |
@@ -30,6 +46,7 @@ environments, or paid GitHub features and makes no remote-CI availability promis
 ## Merge policy
 
 - `main` must remain deployable.
+- Branch from the current public `main`; do not develop against the archived private history.
 - Use focused Conventional Commits and squash merge.
 - A real test failure blocks merge.
 - An infrastructure-only check failure requires a documented complete local gate.

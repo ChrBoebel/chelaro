@@ -32,7 +32,9 @@ Finanzdaten entstehen erst durch deterministische Validierung oder eine bewusste
 > **Projektstatus:** Dies ist eine öffentliche, experimentelle Source Preview. Der Quellcode steht
 > unter der PolyForm Noncommercial License 1.0.0; kommerzielle Nutzung erfordert eine separate
 > schriftliche Lizenz. Das Repository ist **source-available und nicht Open Source**. Es gibt keine
-> offiziellen Downloads, signierten Builds, Releases, Support- oder Produktionszusagen.
+> offiziellen Downloads, signierten Builds, Releases, Support- oder Produktionszusagen. Dieses
+> Repository ist die einzige aktive Chelaro-Codebasis; der Arbeitsablauf ist unter
+> [Repository Operations](docs/operations/REPOSITORY.md) dokumentiert.
 
 ## Produktansicht
 
