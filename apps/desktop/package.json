@@ -1,0 +1,26 @@
+{
+  "name": "desktop",
+  "productName": "Chelaro",
+  "description": "Local-first finance and document management with traceable sources and reviewable AI proposals.",
+  "author": "Christopher Boebel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/main.mjs",
+  "scripts": {
+    "build:runtime": "pnpm --dir ../.. prepare:desktop-runtime",
+    "check": "node --check src/main.mjs && node --check src/runtime.mjs && node --check src/external-links.mjs && node --check src/loading-page.mjs && node --check src/finance-assistant-e2e.mjs && node --check src/preload.cjs && node --check scripts/run-finance-assistant-e2e.mjs && node --test test/*.test.mjs",
+    "e2e:finance-assistant": "node scripts/run-finance-assistant-e2e.mjs",
+    "dev": "electron .",
+    "package:mac": "pnpm build:runtime && electron-builder --config electron-builder.config.cjs --mac dmg zip --arm64",
+    "package:mac:dir": "pnpm build:runtime && electron-builder --config electron-builder.config.cjs --mac dir --arm64",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "electron": "44.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}

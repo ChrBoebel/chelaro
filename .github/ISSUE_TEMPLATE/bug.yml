@@ -1,0 +1,72 @@
+name: Fehler melden
+description: Reproduzierbares Fehlverhalten mit synthetischen Daten melden
+title: "bug: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Keine realen Finanzdokumente, Namen, Kontodaten, Tokens oder `.env`-Inhalte einfügen.
+        Sicherheitsprobleme bitte nach `SECURITY.md` vertraulich melden.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Bereich
+      options:
+        - Desktop-App
+        - Finanzübersicht
+        - Finanzassistent und KI-Vorschläge
+        - Dokumente
+        - Rechnungs-Workbook
+        - Banking
+        - API
+        - Release und Updates
+        - Dokumentation
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version oder Commit
+      placeholder: v0.1.0 oder vollständige Commit-SHA
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduktion
+      description: Kleine, vollständige Schritte mit ausschließlich synthetischen Daten.
+      placeholder: |
+        1. Chelaro öffnen
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Erwartetes Verhalten
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Tatsächliches Verhalten
+    validations:
+      required: true
+  - type: textarea
+    id: integrity
+    attributes:
+      label: Auswirkung auf Datenintegrität
+      description: Wurden Originale, kanonische Finanzdaten, Vorschläge oder Audit Events berührt?
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Datenprüfung
+      options:
+        - label: Die Meldung enthält keine realen Finanz- oder personenbezogenen Daten.
+          required: true
+        - label: Die Meldung enthält keine Secrets, Tokens, Cookies oder signierten URLs.
+          required: true

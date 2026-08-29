@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 10.32.1
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint:web
+      - name: Type-check
+        run: pnpm typecheck:web
+      - name: Test
+        run: pnpm test:web
+      - name: Check desktop shell
+        run: pnpm quality:desktop
+      - name: Check portable agent boundary
+        run: pnpm quality:agent
+      - name: Build
+        run: pnpm build:web
+      - name: Audit dependencies
+        run: pnpm audit:web
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FINANCE_OS_DATABASE_URL: postgresql+asyncpg://finance_os:integration-test-only@localhost:5432/finance_os_test
+      FINANCE_OS_TEST_DATABASE_URL: postgresql+asyncpg://finance_os:integration-test-only@localhost:5432/finance_os_test
+    services:
+      postgres:
+        image: postgres:17.10-alpine3.23@sha256:8189a1f6e40904781fc9e2612687877791d21679866db58b1de996b31fc312e4
+        env:
+          POSTGRES_DB: finance_os_test
+          POSTGRES_USER: finance_os
+          POSTGRES_PASSWORD: integration-test-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username finance_os --dbname finance_os_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: 0.8.24
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+      - name: Install dependencies
+        run: uv sync --project apps/api --locked --all-groups
+      - name: Apply migrations
+        run: uv run --project apps/api alembic -c apps/api/alembic.ini upgrade head
+      - name: Lint
+        run: uv run --project apps/api ruff check apps/api
+      - name: Type-check
+        run: uv run --project apps/api mypy apps/api/src apps/api/tests
+      - name: Test
+        run: uv run --project apps/api pytest apps/api/tests
+      - name: Verify migration rollback and schema parity
+        run: |
+          uv run --project apps/api alembic -c apps/api/alembic.ini downgrade base
+          uv run --project apps/api alembic -c apps/api/alembic.ini upgrade head
+          uv run --project apps/api alembic -c apps/api/alembic.ini check
+      - name: Audit dependencies
+        run: uv run --project apps/api pip-audit
+
+  repository-safety:
+    name: Repository safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Reject sensitive tracked files and credentials
+        run: bash scripts/check-repository-safety.sh
+      - name: Validate Docker Compose
+        run: docker compose --env-file .env.example -f infra/docker/compose.yaml config --quiet

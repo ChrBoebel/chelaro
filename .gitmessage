@@ -1,0 +1,6 @@
+# <type>(<scope>): <imperative subject>
+#
+# Types: feat, fix, docs, refactor, test, chore, ci, perf, revert
+# Suggested scopes: repo, web, api, worker, mcp, db, security, workbooks
+# Explain why in the body when the motivation is not obvious.
+

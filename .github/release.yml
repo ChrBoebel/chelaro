@@ -1,0 +1,32 @@
+changelog:
+  exclude:
+    labels:
+      - duplicate
+      - invalid
+      - wontfix
+  categories:
+    - title: Security and data integrity
+      labels:
+        - security
+        - data-integrity
+    - title: Desktop and releases
+      labels:
+        - desktop
+        - release
+    - title: Product changes
+      labels:
+        - enhancement
+        - api
+        - web
+        - banking
+        - documents
+        - workbook
+    - title: Dependencies
+      labels:
+        - dependencies
+    - title: Documentation
+      labels:
+        - documentation
+    - title: Other changes
+      labels:
+        - "*"

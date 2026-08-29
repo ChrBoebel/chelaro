@@ -1,0 +1,50 @@
+name: Produktidee
+description: Ein konkretes Nutzerproblem und den gewünschten überprüfbaren Ausgang beschreiben
+title: "feat: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Nutzerproblem
+      description: Welches konkrete Finanz- oder Dokumentproblem soll gelöst werden?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Gewünschter Ausgang
+      description: Woran ist erkennbar, dass das Problem gelöst ist?
+    validations:
+      required: true
+  - type: dropdown
+    id: authority
+    attributes:
+      label: Änderungsautorität
+      description: Welche Rolle darf das Ergebnis schreiben?
+      options:
+        - Nur der Owner bestätigt die kanonische Änderung
+        - KI oder Regel erzeugt einen prüfbaren Vorschlag
+        - Rein lesende Funktion ohne Mutation
+        - Noch zu klären
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Quelle und Nachvollziehbarkeit
+      description: Wie bleibt jede betroffene Zahl mit ihrer Herkunft verbunden?
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Nicht-Ziele und Risiken
+      description: Was soll ausdrücklich nicht automatisiert oder versprochen werden?
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Datenprüfung
+      options:
+        - label: Die Beschreibung verwendet ausschließlich synthetische Beispiele.
+          required: true

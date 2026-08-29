@@ -1,0 +1,46 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Financial and document data
+data/
+uploads/
+quarantine/
+exports/
+*.pdf
+*.heic
+*.tiff
+*.xlsx
+*.xls
+*.csv
+
+# JavaScript
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+.turbo/
+.tools/
+apps/desktop/.runtime/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Tooling and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.log

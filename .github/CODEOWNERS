@@ -1,0 +1,9 @@
+# Default review ownership
+* @ChrBoebel
+
+# Security- and integrity-critical surfaces
+/.github/workflows/ @ChrBoebel
+/apps/api/ @ChrBoebel
+/apps/desktop/ @ChrBoebel
+/infra/ @ChrBoebel
+/SECURITY.md @ChrBoebel

@@ -1,0 +1,24 @@
+{
+  "name": "@finance-os/agent-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && node --test dist/test/*.test.js",
+    "test:isolation": "pnpm build && node --test --test-name-pattern=isolation dist/test/isolation.test.js",
+    "generate:codex-schema": "node scripts/generate-codex-schema.mjs",
+    "check:codex-schema": "node scripts/generate-codex-schema.mjs --check",
+    "check:codex-experimental-contract": "node scripts/check-experimental-contract.mjs"
+  },
+  "dependencies": {
+    "@openai/codex": "0.149.1",
+    "ajv": "8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
+  }
+}
