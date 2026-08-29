@@ -24,6 +24,7 @@ import { createUpdateManager } from "./update-manager.mjs";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(currentDirectory, "../../..");
+const desktopIconPath = path.join(app.getAppPath(), "assets/icon.png");
 const preloadPath = path.join(currentDirectory, "preload.cjs");
 const processManager = createProcessManager({ repoRoot });
 const financeAssistantE2e = process.env.FINANCE_OS_E2E_SCENARIO === "finance-assistant";
@@ -72,6 +73,7 @@ function createMainWindow() {
     minHeight: 680,
     show: false,
     title: "Chelaro",
+    icon: desktopIconPath,
     backgroundColor: "#f7f8f3",
     webPreferences: {
       contextIsolation: true,

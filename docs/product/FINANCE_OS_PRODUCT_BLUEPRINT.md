@@ -724,7 +724,7 @@ pnpm --dir apps/web typecheck
 uv run --project apps/api pytest
 ```
 
-Exit: Frischer Clone lässt sich dokumentiert starten; CI ist grün; GitHub meldet `PRIVATE`, der korrekte Remote ist gesetzt und `main` durch Required Checks geschützt.
+Exit: Frischer Clone lässt sich dokumentiert starten; lokale Quality Gates und die bestehende CI sind grün; GitHub meldet `PUBLIC` für die Source Preview, der korrekte Remote ist gesetzt und es wurden keine kostenpflichtigen GitHub-Funktionen vorausgesetzt.
 
 Rollback: Initialisierungscommits können einzeln revertiert werden; kein Produktdatenschema existiert. Ein versehentlich publiziertes Secret folgt einem Incident-Runbook mit sofortiger Rotation, Entfernung und bei Bedarf History Rewrite – ein normaler Revert reicht dafür nicht.
 

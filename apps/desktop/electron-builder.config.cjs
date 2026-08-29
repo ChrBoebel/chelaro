@@ -14,6 +14,7 @@ module.exports = {
     buildResources: "build",
   },
   files: [
+    "assets/**/*",
     "src/**/*",
     "package.json",
     "!test/**/*",
@@ -27,6 +28,7 @@ module.exports = {
   ],
   mac: {
     category: "public.app-category.finance",
+    icon: "assets/icon.icns",
     minimumSystemVersion: "12.0",
     identity: productionSigning ? undefined : null,
     hardenedRuntime: productionSigning,

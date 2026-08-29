@@ -1,6 +1,6 @@
 # macOS Release Process
 
-> **Inactive planning document:** The public code-only Source Preview has no release, binary
+> **Inactive planning document:** The public Source Preview has no release, binary
 > download, signing setup, or update channel. Following this document is not authorized until the
 > owner makes a separate future release decision and all listed gates are satisfied.
 

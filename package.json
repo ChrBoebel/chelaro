@@ -17,6 +17,7 @@
     "dev:desktop": "pnpm --filter desktop dev",
     "dev:web": "pnpm --filter web dev",
     "generate:codex-schema": "pnpm --filter @finance-os/agent-host generate:codex-schema",
+    "generate:icons": "bash scripts/generate-app-icons.sh",
     "infra:config": "docker compose --env-file .env.example -f infra/docker/compose.yaml config --quiet",
     "infra:down": "docker compose --env-file .env -f infra/docker/compose.yaml down",
     "infra:up": "docker compose --env-file .env -f infra/docker/compose.yaml up -d --wait",

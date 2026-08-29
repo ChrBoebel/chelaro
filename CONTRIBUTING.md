@@ -53,10 +53,12 @@ nicht umgangen werden.
 
 ## Marke und Produktoberfläche
 
-- Die öffentliche Source Preview enthält keine Logos, App-Icons, Screenshots oder proprietären
-  Markenunterlagen. Herkunft und Ausschlüsse stehen in [ASSET_PROVENANCE.md](ASSET_PROVENANCE.md).
-- Der Name Chelaro und mögliche spätere Markenassets sind nicht Teil der Softwarelizenz. Es gilt
-  die [Markenrichtlinie](BRAND_ASSETS.md).
+- Logo, App-Icons, Hero und Screenshots sind enthalten, aber nicht Teil der Softwarelizenz.
+  KI-/Codex-Herkunft, Hashes und Datenklassifikation stehen in
+  [ASSET_PROVENANCE.md](ASSET_PROVENANCE.md); für die Nutzung gilt die
+  [Marken- und Assetrichtlinie](BRAND_ASSETS.md).
+- Neue oder veränderte Bilder benötigen vor dem Commit einen Secret-, PII-, Metadaten-, OCR-,
+  Rechte- und History-Scan. Screenshots dürfen ausschließlich synthetische Daten zeigen.
 - In der primären Produktoberfläche heißt es **KI**. **Agent** und **Codex** bleiben technischen
   Architektur-, Sicherheits- und Diagnosekontexten vorbehalten.
 - Ungeprüfte Ergebnisse werden als Vorschlag oder Prüfzustand bezeichnet und dürfen visuell nicht

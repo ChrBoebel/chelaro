@@ -1,19 +1,23 @@
-# Prüfung der öffentlichen Code-only Source Preview
+# Prüfung der öffentlichen Source Preview
 
 Stand: 29. August 2026
 
 ## Entscheidung
 
-**Status: technisch freigabefähige Source Preview nach finalem Sanitizer-PASS.**
+**Status: technisch freigabefähige Source Preview nach vollständiger lokaler Prüfung und finalem
+Sanitizer-PASS mit nicht blockierenden Resthinweisen.**
 
-Diese Freigabe gilt ausschließlich für Quellcode und Dokumentation. Sie ist keine Freigabe einer
+Diese Freigabe gilt ausschließlich für Quellcode, Dokumentation und die im Asset-Register
+aufgeführten visuellen Materialien. Sie ist keine Freigabe einer
 fertigen oder produktionsreifen Finanzsoftware und umfasst keine Binärdownloads, GitHub Releases,
 Signierung, Notarisierung, Updatekanäle, Support- oder Verfügbarkeitszusagen.
 
 Die öffentliche Kopie wurde ohne alte Git-Historie erzeugt und enthält genau einen Initial Commit
 mit GitHub-Noreply-Identität. Die bisherige Historie bleibt in einem getrennten privaten
-Repository. Visuelle Markenassets und proprietäre Markenunterlagen sind nicht Bestandteil der
-öffentlichen Kopie; siehe [Asset-Register](../../ASSET_PROVENANCE.md).
+Repository. Logo, App-Icons, Hero und drei synthetische Produktscreenshots wurden nach einer
+ausdrücklichen Owner-Angabe zur Codex-Agent-Herkunft in einem späteren geprüften Pull Request
+ergänzt; siehe [Asset-Register](../../ASSET_PROVENANCE.md). Proprietäre interne Markenunterlagen
+bleiben ausgeschlossen.
 
 ## Öffentlicher Umfang
 
@@ -22,7 +26,8 @@ Repository. Visuelle Markenassets und proprietäre Markenunterlagen sind nicht B
 - PolyForm Noncommercial 1.0.0 und Informationen zur separaten kommerziellen Lizenzierung;
 - Contribution-, Security- und Support-Richtlinien;
 - Platzhalterbasierte Environment-Beispiele;
-- keine Logos, Icons, Social-Preview-Grafiken oder Produkt-Screenshots;
+- dokumentiertes Chelaro-Logo, daraus erzeugte App-Icons, README-Hero und drei Screenshots mit
+  synthetischen Demonstrationsdaten;
 - keine Releases, signierten Pakete oder offiziellen Downloads.
 
 ## Lizenzmodell
@@ -71,11 +76,11 @@ Amtliche Ausgangspunkte:
 
 | Gate | Status |
 | --- | --- |
-| Lokale Qualitätsprüfung | Vor Veröffentlichung vollständig auszuführen und zu dokumentieren. |
-| Finaler Sanitizer | Muss `PASS` ergeben; ein `FAIL` blockiert den Push. |
+| Lokale Qualitätsprüfung | `PASS`: Lint, Typprüfung, Tests, Builds, Safety- und Dependency-Prüfungen einschließlich Agent Host. |
+| Finaler Sanitizer | `PASS WITH WARNINGS`; keine Veröffentlichungsblocker. Resthinweise sind im Sanitization Report und Asset-Register dokumentiert. |
 | Alte Git-Historie | Nicht Bestandteil des öffentlichen Ein-Commit-Repositorys. |
-| Secrets und personenbezogene Daten | Vollständiger Current-Tree- und Git-Historien-Scan erforderlich. |
-| Visuelle Asset-Rechte | Durch Nichtaufnahme aller visuellen Assets aus dem öffentlichen Umfang entfernt. |
+| Secrets und personenbezogene Daten | Current Tree und vollständig erreichbare öffentliche Historie geprüft; nur dokumentierte synthetische Testwerte. |
+| Visuelle Asset-Herkunft | Owner-Angabe Codex-Agent-Workflow; Hash-, Metadaten-, OCR-/Sicht- und PII-Prüfung dokumentiert. Restwarnungen im Asset-Register. |
 | Softwarelizenz | PolyForm Noncommercial 1.0.0; source-available, nicht Open Source. |
 | CI und GitHub-Plus | Keine neuen Funktionen oder Konfigurationen für diese Preview. |
 | Binärrelease | Nicht freigegeben; keine Downloads oder GitHub Releases. |
@@ -86,7 +91,7 @@ Amtliche Ausgangspunkte:
 | Repository | Sichtbarkeit | Zweck |
 | --- | --- | --- |
 | `chelaro-internal` | privat | bisherige Historie und interne Referenz |
-| `chelaro` | öffentlich | bereinigte Code-only Source Preview mit einem Initial Commit |
+| `chelaro` | öffentlich | bereinigte Source Preview; historienfreier Initial Commit plus geprüfte Asset-PRs |
 
 Die aktive lokale Weiterentwicklung soll nach Veröffentlichung aus einer neuen Arbeitskopie des
 öffentlichen Repositorys erfolgen. Das private Repository bleibt Referenzarchiv; Änderungen

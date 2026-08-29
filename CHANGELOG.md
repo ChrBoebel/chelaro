@@ -43,5 +43,5 @@ public Source Preview provides no binaries or GitHub Release.
 - Sandboxed Electron renderer with context isolation and restricted navigation.
 - Repository safety checks and dependency audits.
 
-The release remains unpublished. This code-only Source Preview does not authorize tagging,
+The release remains unpublished. This Source Preview does not authorize tagging,
 publishing, signing, or distributing artifacts.

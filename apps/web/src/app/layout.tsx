@@ -35,7 +35,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Chelaro – Jede Zahl. Belegt.",
   description:
-    "Offene, KI-gestützte Finanz- und Belegverwaltung mit prüfbaren Quellen und menschlicher Kontrolle.",
+    "Lokale, KI-gestützte Finanz- und Belegverwaltung mit prüfbaren Quellen und menschlicher Kontrolle.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

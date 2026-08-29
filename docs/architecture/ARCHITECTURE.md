@@ -1,6 +1,6 @@
 # Chelaro Architecture
 
-Status: Private Entwicklungs-Preview · Source-available-Lizenz festgelegt · 29 August 2026
+Status: Öffentliche Source Preview · source-available, nicht Open Source · 29 August 2026
 
 Chelaro is a local-first financial workspace. Its architecture separates original evidence,
 canonical financial records, and unverified automation so that convenience never silently changes
