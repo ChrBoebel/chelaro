@@ -1,5 +1,7 @@
 # ADR 0007: Isolate the Codex coding agent from canonical finance data
 
+> Authentication, `CODEX_HOME`, and runtime discovery are superseded by ADR 0011.
+
 ## Context
 
 Chelaro needs an embedded coding-agent chat without giving model-driven tools access to canonical finance data, original documents, application credentials, or the live source checkout. Codex App Server provides the required authentication, streamed events, and approval protocol, but its process boundary alone is not a sufficient trust boundary for this product.

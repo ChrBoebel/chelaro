@@ -77,19 +77,23 @@ environment, the renderer, and the Codex child environment. Next.js receives onl
 and a different per-launch gateway capability. Its explicit same-origin routes are the renderer's
 only path to the loopback Host gateway.
 
-The Host runs the pinned and Developer-ID-verified App Server with an app-owned `CODEX_HOME`, no
-execution environments, and exactly eight dynamic finance tools. Those tools expose bounded typed
+The Host discovers the supported system Codex CLI, starts its App Server with the user's normal
+`HOME`/`CODEX_HOME`, and checks the existing login using `account/read` after consent. It never
+reads or mutates the credential files and does not implement login or logout. Missing or unsupported
+Codex installations degrade only the assistant. Before thread creation the Host uses `config/read`
+to enumerate bounded MCP identifiers and disables each inherited server in the thread override;
+the configuration is neither returned to the UI nor persisted. The finance thread still has no execution
+environments and exposes exactly eight dynamic finance tools. Those tools expose bounded typed
 projections and proposal creation only. They never expose original documents, OCR, bank access,
 owner mutations, arbitrary HTTP, files, shell, code execution, browser control, MCP, or plugins.
 Every call is bound to the active session, turn, call ID, consent version, and budget. Typed finance
 fields remain untrusted prompt content. The App Server itself remains a trusted same-user control-
-plane dependency; this residual risk is accepted in ADR 0009 and narrowed for this product in ADR
-0010.
+plane dependency; this residual risk and the shared-login boundary are accepted in ADR 0011.
 
 ### Desktop renderer
 
 Electron runs with context isolation and sandboxing enabled and Node.js integration disabled.
-Navigation remains on the local Chelaro origin; new HTTPS links open externally. Update IPC accepts
+Navigation remains on the local Chelaro origin; new windows and external navigation are denied. Update IPC accepts
 messages only from the current Chelaro renderer.
 
 ## Storage model

@@ -1,6 +1,6 @@
 # Chelaro Threat Model
 
-Status: Preview baseline · 28 August 2026
+Status: Preview baseline · 30 August 2026
 
 This document describes implemented controls and known gaps. It is not a claim of complete
 security, regulatory compliance, or protection against every local attacker.
@@ -14,7 +14,7 @@ security, regulatory compliance, or protection against every local attacker.
 5. macOS signing identity, Apple notarization credentials, and update-channel credentials.
 6. Release artifacts and update metadata.
 7. Finance-assistant consent history and per-launch API/gateway capabilities.
-8. The app-owned Codex home, pinned App Server identity, and exact finance-tool policy.
+8. The user's Codex credential store, compatible App Server identity, and exact finance-tool policy.
 
 ## Trust boundaries
 
@@ -26,7 +26,7 @@ flowchart TB
     Desktop -->|authenticated parent IPC| Host[Finance Agent Host]
     Next -->|per-launch gateway capability| Host
     Host -->|dedicated finance-assistant token| API
-    Host -->|eight tools; no execution environment| Codex[Pinned Codex App Server]
+    Host -->|eight tools; no execution environment| Codex[Supported system Codex App Server]
     Upload[Untrusted document bytes] --> API
     API --> DB[(Canonical database)]
     API --> Files[(Original document store)]
@@ -48,7 +48,8 @@ messages are untrusted input.
 | Model-driven tool exceeds finance scope | Exact eight-tool provider manifest; no execution environment; no shell/files/web/browser/MCP/plugins; bounded schemas, call binding, turn/session budgets, and consent checks before and after every call | The trusted same-user App Server remains residual risk; packaged integration requires a new review |
 | Finance data is sent without current consent | Append-only owner-only consent journal; notice/version/category binding; `revoke_pending` is fsynced before interrupt and further transfers fail closed | Provider-side retention is governed outside Chelaro and must remain disclosed |
 | Assistant capability leaks to Codex or renderer | Generated per launch; delivered to Host post-start by inherited IPC; removed from child environments; different gateway token held only by Electron and Next.js | Same-user process compromise remains outside logical token separation |
-| Replaced or reconfigured Codex control plane | Exact dependency pin; macOS version/architecture, executable, version, hash, and Developer ID verification; app-owned empty configuration; fail-closed startup | The verified App Server remains a trusted process under the same OS user; revisit before packaged or multi-platform release |
+| Replaced or reconfigured Codex control plane | Direct executable discovery through absolute search directories without a shell; exact compatible version; generated protocol validation; bounded `config/read`; every inherited MCP ID disabled per thread; explicit feature/skill disables; exact provider-manifest test; fail-closed server-request policy | The compatible system App Server and same-user configuration remain trusted; Chelaro cannot provide an OS boundary around them |
+| Chelaro damages or leaks the global Codex login | No direct credential-file reads; no copy/import; no login/logout RPC; account status only after explicit consent; snapshots contain no email, token, or path | A compromised same-user process remains outside this logical boundary |
 | Stale or conflicting financial writes | Expected-version checks; transactional changes; audit events | Add conflict telemetry without sensitive payloads |
 | Token theft from source, logs, or fixtures | Environment-based secrets; repository safety scan; synthetic fixtures | Move desktop credentials to Keychain where persistent credentials become necessary |
 | Cross-origin browser mutation | Same-origin validation; JSON-only bounded commands; explicit route allowlist; bearer capabilities remain server-side; gateway rejects Origin and cookies | Keep browser and proxy regression tests mandatory |

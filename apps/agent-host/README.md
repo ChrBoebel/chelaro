@@ -1,6 +1,6 @@
 # Chelaro Agent Host
 
-Der Agent Host verbindet den einwilligungsgebundenen Finanzassistenten mit dem gepinnten Codex App
+Der Agent Host verbindet den einwilligungsgebundenen Finanzassistenten mit dem Codex App
 Server. Er stellt ausschließlich die begrenzten Chelaro-Finanzwerkzeuge bereit – keine Shell,
 Dateien, Browser-, Web- oder Coding-Werkzeuge.
 
@@ -22,9 +22,11 @@ pnpm check:codex-schema
 pnpm test:agent-host
 ```
 
-Die realen App-Server- und Isolationstests benötigen das dokumentierte macOS-15.6-Apple-Silicon-
-System und laufen über `pnpm quality:agent:macos`.
+Für die Nutzung muss die unterstützte Codex CLI `0.151.0` installiert sein. Eine vorhandene
+`codex login`-Anmeldung wird über den App Server wiederverwendet; Chelaro besitzt keinen eigenen
+Login oder Logout und liest keine `auth.json`. Die realen App-Server-Tests laufen über
+`pnpm quality:agent:macos`.
 
 Weitere Details: [Finanzassistent-Architektur](../../docs/architecture/ARCHITECTURE.md) ·
 [Threat Model](../../docs/security/THREAT_MODEL.md) ·
-[ADR 0009](../../docs/decisions/0009-trust-pinned-codex-control-plane.md)
+[ADR 0011](../../docs/decisions/0011-reuse-system-codex-authentication.md)

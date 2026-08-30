@@ -5,7 +5,8 @@
 Accepted as control-plane evidence on 2026-08-28. ADR 0010 supersedes its coding-agent product
 scope and narrowly replaces its no-finance-credential rule with a dedicated finance-assistant
 principal delivered only to the trusted Host after startup. Workspace, shell, file-change, and
-coding-tool decisions below are historical and do not apply to the Finance Assistant.
+coding-tool decisions below are historical and do not apply to the Finance Assistant. Binary
+discovery, version support, and shared authentication are superseded by ADR 0011.
 
 ## Context
 
