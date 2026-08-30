@@ -35,11 +35,11 @@ describe("DesktopUpdateButton", () => {
 
     await waitFor(() => expect(subscriber).toBeTypeOf("function"));
     await act(async () => Promise.resolve());
-    await act(async () => subscriber?.({ status: "available", version: "0.2.0" }));
+    await act(async () => subscriber?.({ status: "available", version: "0.2.1" }));
     fireEvent.click(screen.getByRole("button", { name: /Update verfügbar/ }));
     expect(download).toHaveBeenCalledOnce();
 
-    await act(async () => subscriber?.({ status: "downloaded", version: "0.2.0" }));
+    await act(async () => subscriber?.({ status: "downloaded", version: "0.2.1" }));
     fireEvent.click(screen.getByRole("button", { name: /Neu starten/ }));
     expect(install).toHaveBeenCalledOnce();
   });
