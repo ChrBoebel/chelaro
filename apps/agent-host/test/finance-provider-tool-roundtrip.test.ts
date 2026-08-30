@@ -101,6 +101,119 @@ test("provider edge: real App Server completes a finance tool round trip", async
   }
 });
 
+test("provider edge: real App Server corrects invalid proposal arguments exactly once", async () => {
+  const privateMarker = "PRIVATE_SYNTHETIC_MARKER";
+  const providerRequests: unknown[] = [];
+  const provider = await startProvider((requestIndex) => {
+    if (requestIndex === 0) {
+      return proposalToolCallStream("finance_bad_call", {
+        debtor_name: privateMarker,
+        original_amount: 500,
+        currency: "EUR",
+        description: "Synthetischer Zweck",
+        rationale: "Synthetischer Vorschlag",
+      });
+    }
+    if (requestIndex === 1) {
+      return proposalToolCallStream("finance_corrected_call", {
+        debtor_name: privateMarker,
+        original_amount: "500.00",
+        currency: "EUR",
+        description: "Synthetischer Zweck",
+        rationale: "Synthetischer Vorschlag",
+      });
+    }
+    if (requestIndex === 2) return assistantMessageStream("Der prüfpflichtige Vorschlag wurde erstellt.");
+    throw new Error("Synthetic provider received an unexpected retry.");
+  }, providerRequests);
+  const temporaryRoot = mkdtempSync(join(tmpdir(), "finance-os-provider-correction-"));
+  const codexHome = join(temporaryRoot, "codex-home");
+  mkdirSync(codexHome, { mode: 0o700 });
+  writeFileSync(join(codexHome, "config.toml"), providerConfig(provider.origin), { mode: 0o600 });
+  const child = spawn(process.execPath, [codexEntry, "app-server", "--stdio", "--strict-config"], {
+    cwd: temporaryRoot,
+    env: {
+      CODEX_HOME: codexHome,
+      HOME: temporaryRoot,
+      LANG: "C.UTF-8",
+      PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
+      TMPDIR: temporaryRoot,
+    },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const apiCalls: Array<{ argumentsValue: Record<string, unknown>; name: string }> = [];
+  const api: FinanceToolApi = {
+    call: async (name, argumentsValue) => {
+      apiCalls.push({ name, argumentsValue });
+      return { id: "223e4567-e89b-42d3-a456-426614174000", status: "pending" };
+    },
+  };
+  const dispatcher = new FinanceToolDispatcher(api, { assertGranted: () => undefined });
+  let handler: FinanceServerRequestHandler | undefined;
+  let bindTurn: (() => void) | undefined;
+  const turnBound = new Promise<void>((resolveBound) => { bindTurn = resolveBound; });
+  let assistantText = "";
+  let resolveCompleted: (() => void) | undefined;
+  const completed = new Promise<void>((resolve) => { resolveCompleted = resolve; });
+  const rpc = new JsonRpcClient({
+    input: child.stdout,
+    output: child.stdin,
+    defaultTimeoutMs: 15_000,
+    onNotification: ({ method, params }) => {
+      if (method === "item/agentMessage/delta") assistantText += (params as { delta: string }).delta;
+      if (method === "turn/completed") resolveCompleted?.();
+    },
+    onServerRequest: async (request) => {
+      await turnBound;
+      if (!handler) throw new Error("Finance handler was not bound.");
+      return handler.handle(request);
+    },
+  });
+
+  try {
+    await rpc.request("initialize", buildFinanceInitializeParams("0.1.0"));
+    const started = await rpc.request("thread/start", buildFinanceThreadStartParams()) as { thread: { id: string } };
+    dispatcher.startSession({
+      consentVersion: "2026-08-28.v1",
+      hostEpoch: "host_epoch_1",
+      providerThreadId: started.thread.id,
+      sessionId: "session_1",
+    });
+    handler = new FinanceServerRequestHandler({ dispatcher, onAbortTurn: () => undefined });
+    const turnStarted = await rpc.request("turn/start", {
+      input: [{ text: "Erstelle einen synthetischen Forderungsvorschlag.", text_elements: [], type: "text" }],
+      threadId: started.thread.id,
+    }) as { turn: { id: string } };
+    dispatcher.startTurn({ providerTurnId: turnStarted.turn.id });
+    bindTurn?.();
+    await withTimeout(completed, 15_000);
+
+    assert.equal(providerRequests.length, 3);
+    const firstToolOutputs = toolOutputsOf(providerRequests[1]);
+    assert.match(JSON.stringify(firstToolOutputs), /invalid_arguments/);
+    assert.doesNotMatch(JSON.stringify(firstToolOutputs), new RegExp(privateMarker));
+    assert.deepEqual(apiCalls, [{
+      name: "finance_propose_receivable_create",
+      argumentsValue: {
+        debtor_name: privateMarker,
+        original_amount: "500.00",
+        currency: "EUR",
+        description: "Synthetischer Zweck",
+        rationale: "Synthetischer Vorschlag",
+      },
+    }]);
+    assert.equal(assistantText, "Der prüfpflichtige Vorschlag wurde erstellt.");
+  } finally {
+    rpc.close();
+    child.kill("SIGTERM");
+    if (child.exitCode === null && child.signalCode === null) {
+      await new Promise((resolveClose) => child.once("close", resolveClose));
+    }
+    await provider.close();
+    rmSync(temporaryRoot, { force: true, recursive: true });
+  }
+});
+
 function toolCallStream(): string {
   const item = {
     arguments: '{"period":"2026-08","currency":"EUR"}',
@@ -115,6 +228,23 @@ function toolCallStream(): string {
     ["response.created", { response: { id: "resp_finance_tool" }, type: "response.created" }],
     ["response.output_item.done", { item, output_index: 0, type: "response.output_item.done" }],
     ["response.completed", { response: completedResponse("resp_finance_tool", [item]), type: "response.completed" }],
+  ]);
+}
+
+function proposalToolCallStream(callId: string, argumentsValue: Record<string, unknown>): string {
+  const item = {
+    arguments: JSON.stringify(argumentsValue),
+    call_id: callId,
+    id: `fc_${callId}`,
+    name: "finance_propose_receivable_create",
+    namespace: "chelaro_finance",
+    status: "completed",
+    type: "function_call",
+  };
+  return sse([
+    ["response.created", { response: { id: `resp_${callId}` }, type: "response.created" }],
+    ["response.output_item.done", { item, output_index: 0, type: "response.output_item.done" }],
+    ["response.completed", { response: completedResponse(`resp_${callId}`, [item]), type: "response.completed" }],
   ]);
 }
 
@@ -245,6 +375,24 @@ async function readJsonBody(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   for await (const chunk of request) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+function toolOutputsOf(value: unknown): unknown[] {
+  const outputs: unknown[] = [];
+  const visit = (candidate: unknown): void => {
+    if (Array.isArray(candidate)) {
+      for (const item of candidate) visit(item);
+      return;
+    }
+    if (!candidate || typeof candidate !== "object") return;
+    const record = candidate as Record<string, unknown>;
+    if (record.type === "function_call_output" || record.type === "custom_tool_call_output") {
+      outputs.push(record);
+    }
+    for (const nested of Object.values(record)) visit(nested);
+  };
+  visit(value);
+  return outputs;
 }
 
 async function withTimeout(promise: Promise<void>, timeoutMs: number): Promise<void> {
