@@ -1,9 +1,9 @@
 # Chelaro Desktop
 
-Die Electron-Shell startet Chelaro lokal aus dem Quellcode. Sie enthält die API- und Web-Runtime,
-verwaltet lokale Prozesse und enthält einen derzeit inaktiven Update-Flow für eine mögliche
-spätere Evaluation. Die öffentliche Source Preview bietet keine signierten Releases oder
-Binärdownloads.
+Die Electron-Shell enthält die lokale API-, Web- und Finance-Agent-Host-Runtime, verwaltet deren
+Prozesse und stellt den expliziten macOS-Updateablauf bereit. Paketierte Builds enthalten dauerhaft
+den öffentlichen GitHub-Releases-Provider. Die Source Preview bietet noch keine signierten
+Downloads, solange Developer-ID-Signierung und Apple-Notarisierung nicht eingerichtet sind.
 
 ## Entwickeln und paketieren
 
@@ -15,8 +15,18 @@ pnpm package:desktop:dir
 pnpm package:desktop
 ```
 
-Lokale Pakete sind absichtlich unsigniert und ausschließlich für Entwicklungstests gedacht. Die
-Source Preview veröffentlicht keine DMG- oder ZIP-Artefakte.
+Lokale Pakete sind absichtlich unsigniert und ausschließlich für Entwicklungstests gedacht. Sie
+enthalten zwar `app-update.yml`, sind aber keine freigegebenen Updateartefakte. Nur der geschützte
+Tag-Workflow darf signierte DMG-, ZIP-, Blockmap- und `latest-mac.yml`-Dateien veröffentlichen.
+
+## Update-Bootstrap
+
+- `0.1.0` besitzt keine eingebettete Updatekonfiguration und benötigt einmalig eine manuelle,
+  signierte `0.2.0`-Installation.
+- Ab `0.2.0` prüft Chelaro den stabilen öffentlichen GitHub Release ohne Client-Token.
+- Download und Installation starten nur nach einer ausdrücklichen Nutzeraktion.
+- Ein Update ersetzt das App-Bundle, nicht den bestehenden Datenpfad unter
+  `~/Library/Application Support/Finance OS/`.
 
 ## Vertrauensgrenzen
 
@@ -33,7 +43,7 @@ pnpm release:check
 ```
 
 Die öffentliche Source Preview enthält das dokumentierte Chelaro-App-Icon und drei Screenshots mit
-synthetischen Daten, aber keine veröffentlichten Binärpakete. Screenshots werden über
+synthetischen Daten, aber derzeit keine veröffentlichten Binärpakete. Screenshots werden über
 `pnpm --filter desktop capture:docs` erzeugt; der Capture verlangt eine Loopback-URL und die
 ausdrückliche Bestätigung synthetischer Daten.
 

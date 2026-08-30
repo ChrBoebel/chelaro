@@ -40,17 +40,17 @@ test("update flow exposes the button only after a newer version is known", async
   const harness = createHarness();
 
   assert.deepEqual(await harness.invoke(UPDATE_CHANNELS.getState), { status: "idle" });
-  harness.updater.emit("update-available", { version: "0.2.0" });
-  assert.deepEqual(harness.manager.getState(), { status: "available", version: "0.2.0" });
+  harness.updater.emit("update-available", { version: "0.2.1" });
+  assert.deepEqual(harness.manager.getState(), { status: "available", version: "0.2.1" });
 
   await harness.invoke(UPDATE_CHANNELS.download);
   assert.deepEqual(harness.manager.getState(), {
     status: "downloading",
-    version: "0.2.0",
+    version: "0.2.1",
     percent: 0,
   });
 
-  harness.updater.emit("update-downloaded", { version: "0.2.0" });
+  harness.updater.emit("update-downloaded", { version: "0.2.1" });
   assert.equal(harness.sent.at(-1).channel, UPDATE_CHANNELS.stateChanged);
   harness.manager.stop();
 });
@@ -62,7 +62,7 @@ test("install stops local services before handing off to the updater", async () 
     assert.equal(harness.servicesStopped(), true);
     installed = true;
   };
-  harness.updater.emit("update-downloaded", { version: "0.2.0" });
+  harness.updater.emit("update-downloaded", { version: "0.2.1" });
 
   await harness.invoke(UPDATE_CHANNELS.install);
 
@@ -75,7 +75,7 @@ test("failed downloads return the updater to a safe hidden state", async () => {
   harness.updater.downloadUpdate = async () => {
     throw new Error("download unavailable");
   };
-  harness.updater.emit("update-available", { version: "0.2.0" });
+  harness.updater.emit("update-available", { version: "0.2.1" });
 
   await harness.invoke(UPDATE_CHANNELS.download);
 

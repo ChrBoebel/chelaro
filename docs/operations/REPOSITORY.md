@@ -31,17 +31,18 @@ code.
 | Issues | Enabled |
 | Projects | Disabled initially |
 | Discussions | Disabled initially |
-| Releases | None; no signed downloads or binary artifacts |
+| Releases | None; the unpublished `0.2.0` update bootstrap is prepared on a feature branch |
 | Dependabot alerts | Use the capabilities available on the public repository |
 | Secret scanning | Use the capabilities available on the public repository |
 | Required branch rules | Not required initially; no paid-plan feature is assumed |
 
 ## Operational blockers
 
-This repository publishes source code and documentation only. It does not publish signed macOS
-releases, downloads, update artifacts, or a production-ready financial application. Existing
-workflow files are retained as code, but this Preview does not add CI configuration, protected
-environments, or paid GitHub features and makes no remote-CI availability promise.
+Normal GitHub CI is operational. The repository still publishes source code and documentation only;
+it does not yet publish a signed macOS application. The release workflow now targets public GitHub
+Releases directly, but remains blocked until the protected `macos-release` environment contains the
+required Developer ID and App Store Connect secrets. No tag or binary publication is permitted
+before signature, notarization, Gatekeeper, checksum, and update-bootstrap verification pass.
 
 ## Merge policy
 

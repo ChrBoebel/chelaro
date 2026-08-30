@@ -1,6 +1,6 @@
 {
   "name": "finance-os",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "packageManager": "pnpm@10.32.1",
   "engines": {
@@ -31,7 +31,6 @@
     "package:desktop": "pnpm --filter desktop package:mac",
     "package:desktop:dir": "pnpm --filter desktop package:mac:dir",
     "prepare:desktop-runtime": "bash scripts/prepare-desktop-runtime.sh",
-    "publish:desktop-update": "bash scripts/publish-desktop-update.sh",
     "release:check": "bash scripts/check-release-readiness.sh",
     "smoke:web:standalone": "node scripts/smoke-standalone-web.mjs",
     "quality": "pnpm check:safety && pnpm quality:api && pnpm quality:web && pnpm quality:desktop && pnpm quality:agent",

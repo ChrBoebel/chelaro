@@ -114,7 +114,7 @@ Die erste durchgängige Vertrauensschicht ist implementiert:
 - exakt acht typisierte Finanzwerkzeuge ohne Shell, Dateien, Web, Browser oder Coding-Funktionen;
 - KI-Änderungen ausschließlich als prüfbare Vorschläge; bestehende Daten bleiben versionsgebunden;
 - Electron-Source-Runtime für lokale Entwicklung auf macOS;
-- vorbereiteter, derzeit nicht öffentlich freigegebener Update-Codepfad.
+- vorbereiteter GitHub-Release-Updatekanal mit explizitem Download und Installieren in der App.
 
 OCR, Transaktionsimporte, der Live-FinTS-Adapter, sichere lokale Credential-Ablage,
 Backup-Automation und die paketierte Finance-Assistant-Integration befinden sich noch in
@@ -187,9 +187,9 @@ Dienste und öffnet Chelaro in einem isolierten Electron-Fenster:
 pnpm dev:desktop
 ```
 
-Die Preview veröffentlicht keine DMG-, ZIP- oder sonstigen Binärartefakte. Vorhandene
-Paketierungs- und Releasepfade sind Entwicklungsstand, kein unterstützter Installationsweg und
-keine Zusage eines späteren Releases.
+Die Preview veröffentlicht derzeit noch keine DMG-, ZIP- oder sonstigen Binärartefakte. Der
+Paketierungs- und GitHub-Releasepfad ist implementiert, bleibt aber bis zur erfolgreichen Developer-
+ID-Signierung und Apple-Notarisierung ein nicht unterstützter Release-Kandidat.
 
 ### Datenpfad
 
@@ -205,9 +205,16 @@ verschoben werden.
 
 ## Updates und Releases
 
-Für diese Source Preview existieren kein öffentlicher Updatekanal, keine signierten Downloads und
-keine GitHub Releases. Der vorhandene Update-Code ist deaktivierte Entwicklungsarbeit und darf
-nicht als verfügbare Produktfunktion dargestellt werden.
+Chelaro ist für einen öffentlichen GitHub-Releases-Updatekanal vorbereitet. Jeder zukünftige
+Release-Build enthält die Provider-Konfiguration; der Nutzer entscheidet weiterhin ausdrücklich
+über Download und Installation. Aktuell existieren noch keine signierten Downloads und kein
+GitHub Release, weil die Apple-Signing- und Notarisierungsdaten noch nicht konfiguriert sind.
+
+Bestehende lokale `0.1.0`-Installationen enthalten kein `app-update.yml` und können die erste
+updatefähige Version deshalb nicht selbst finden. Eine signierte `0.2.0` muss einmal manuell aus
+dem verifizierten DMG installiert werden. Erst danach kann der Update-Button eine höhere Version
+wie `0.2.1` laden. Der genaue Bootstrap-, Prüf- und Rollback-Ablauf steht im
+[macOS Release and Update Process](docs/releases/RELEASE_PROCESS.md).
 
 ## Sicherheit und Datenintegrität
 

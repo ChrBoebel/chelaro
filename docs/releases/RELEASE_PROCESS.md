@@ -1,16 +1,29 @@
-# macOS Release Process
+# macOS Release and Update Process
 
-> **Inactive planning document:** The public Source Preview has no release, binary
-> download, signing setup, or update channel. Following this document is not authorized until the
-> owner makes a separate future release decision and all listed gates are satisfied.
+Chelaro releases are signed promotions of a reviewed `main` commit. The public GitHub repository is
+the update origin: a release contains the DMG for installation plus the ZIP, ZIP blockmap, and
+`latest-mac.yml` consumed by `electron-updater`. No client-side GitHub token and no separate S3
+bucket are required.
 
-Chelaro releases are deliberate, signed promotions of a reviewed `main` commit. A tag must never be
-created to test whether release configuration happens to work.
+The repository is technically prepared for this process, but no release is public until the owner
+configures the Apple credentials, tags a reviewed release commit, and the complete workflow passes.
+A tag must never be created merely to test incomplete release configuration.
+
+## Bootstrap boundary
+
+An installed build without `Contents/Resources/app-update.yml` cannot discover a later release.
+That applies to the existing local `0.1.0` installations. The first signed update-capable release,
+`0.2.0`, therefore requires a one-time manual DMG installation.
+
+From `0.2.0` onward, each packaged build embeds the public GitHub provider configuration. A newer
+stable GitHub Release with a higher Semantic Version can then be discovered, downloaded, and
+installed through Chelaro's explicit update button. Verify this boundary by publishing a higher
+patch release such as `0.2.1`; republishing `0.2.0` can never test version discovery.
 
 ## Required GitHub environment
 
-Create the protected environment `macos-release` and restrict deployments to release tags from
-reviewed `main` commits.
+Create the protected environment `macos-release`. Restrict approvals to the repository owner and
+allow deployments only from reviewed release tags on `main`.
 
 Environment secrets:
 
@@ -19,84 +32,121 @@ Environment secrets:
 | `MACOS_CERTIFICATE_P12_BASE64` | Base64-encoded Developer ID Application certificate and private key |
 | `MACOS_CERTIFICATE_PASSWORD` | Password protecting the P12 archive |
 | `APPLE_API_KEY_P8_BASE64` | Base64-encoded App Store Connect API key |
-| `APPLE_API_KEY_ID` | Apple API key identifier |
-| `APPLE_API_ISSUER` | Apple API issuer identifier |
-| `UPDATE_AWS_ACCESS_KEY_ID` | Write-only update-bucket credential |
-| `UPDATE_AWS_SECRET_ACCESS_KEY` | Secret for the update-bucket credential |
+| `APPLE_API_KEY_ID` | App Store Connect API key identifier |
+| `APPLE_API_ISSUER` | App Store Connect issuer identifier |
 
-Environment variables:
-
-| Name | Requirement |
-| --- | --- |
-| `FINANCE_OS_UPDATE_URL` | Public HTTPS base URL consumed by the desktop updater |
-| `FINANCE_OS_UPDATE_BUCKET` | Private deployment bucket name |
-| `FINANCE_OS_UPDATE_PREFIX` | Version channel path, normally `mac/arm64` |
-| `UPDATE_AWS_REGION` | Region of the update bucket |
-
-Use a dedicated bucket principal limited to versioned Chelaro artifacts and update metadata. Never
-reuse a personal AWS credential.
+GitHub supplies the short-lived `GITHUB_TOKEN` used to create the Release. Do not add a personal
+access token, AWS credential, update URL, signing file, or certificate to the repository. At the
+time the `0.2.0` candidate was prepared, none of the five Apple secrets existed in GitHub.
 
 ## Version preparation
 
-1. Select a Semantic Version.
-2. Set the same version in root `package.json` and `apps/desktop/package.json`.
-3. Move the matching `CHANGELOG.md` entry from `Release candidate` to `YYYY-MM-DD`.
-4. Update `docs/releases/vX.Y.Z.md` with only shipped behavior and known limitations.
+1. Select a higher Semantic Version. Never reuse a published version.
+2. Set the same version in root `package.json`, `apps/desktop/package.json`, and
+   `apps/web/package.json`.
+3. Add or update `docs/releases/vX.Y.Z.md` with only behavior included in the release.
+4. Add the matching `CHANGELOG.md` entry. Keep it marked as an unpublished candidate on a feature
+   branch; replace that marker with `YYYY-MM-DD` only in the reviewed release PR.
 5. Run:
 
 ```bash
-pnpm release:check -- vX.Y.Z
+pnpm release:check
 pnpm quality
+pnpm quality:agent:macos
+pnpm test:e2e:finance-assistant
 pnpm infra:config
 ```
 
-6. Merge the focused release PR after mandatory CI is green.
+6. Build an unsigned local package and verify the update metadata exists:
+
+```bash
+pnpm package:desktop
+test -f apps/desktop/dist/mac-arm64/Chelaro.app/Contents/Resources/app-update.yml
+test -f apps/desktop/dist/latest-mac.yml
+test -f apps/desktop/dist/Chelaro-X.Y.Z-arm64.zip
+test -f apps/desktop/dist/Chelaro-X.Y.Z-arm64.zip.blockmap
+```
+
+Local packages remain development artifacts. Only the GitHub workflow may create the signed,
+notarized release candidate.
 
 ## Tag and publish
 
-From the reviewed merge commit on `main`:
+After the release PR is merged and CI is green, create the annotated release tag from that exact
+`main` commit:
 
 ```bash
 git switch main
-git pull --ff-only
+git pull --ff-only origin main
+pnpm release:check -- vX.Y.Z
 git tag -s vX.Y.Z -m "Chelaro vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-The release workflow then:
+The tag workflow then:
 
-1. verifies that tag and package versions agree;
-2. runs the full repository quality gate;
-3. builds the embedded runtime and Apple-Silicon app;
-4. signs, notarizes, staples, and verifies the app and DMG;
-5. creates SHA-256 checksums;
-6. uploads workflow evidence;
-7. publishes versioned update artifacts before `latest-mac.yml`;
-8. creates the GitHub Release with DMG, ZIP, update metadata, and checksums.
+1. proves the tagged commit is contained in `origin/main`;
+2. proves tag, package versions, changelog, release notes, and GitHub provider agree;
+3. runs the full repository quality gate;
+4. builds the embedded API, Web, and Agent Host runtimes;
+5. signs with Developer ID, enables hardened runtime, notarizes, and staples the macOS artifacts;
+6. verifies the signature, Gatekeeper assessment, and notarization ticket;
+7. creates SHA-256 checksums and preserves workflow evidence;
+8. creates the stable GitHub Release only after every prior gate passes;
+9. uploads DMG, ZIP, ZIP blockmap, `latest-mac.yml`, and checksums as one atomic release set.
+
+The workflow deliberately does not give electron-builder a GitHub publication token during the
+build. Publication happens in the final explicit `gh release create` step, after verification.
+
+## Bootstrap installation and update E2E
+
+For `0.2.0` only:
+
+1. download the signed DMG from the GitHub Release;
+2. verify its SHA-256 checksum;
+3. install it manually over the prior `0.1.0` app without touching
+   `~/Library/Application Support/Finance OS/`;
+4. verify `app-update.yml` exists in the installed bundle;
+5. verify Chelaro starts, reuses the system Codex login, and opens the existing local database.
+
+For the first automatic-update proof, publish a signed `0.2.1` containing only a harmless visible
+release marker. From installed `0.2.0`:
+
+1. wait for the startup update check or restart the app;
+2. confirm the update button announces `0.2.1`;
+3. download and install through the button;
+4. confirm Chelaro restarts as `0.2.1`;
+5. confirm existing documents, proposals, audit events, Codex login reuse, and consent state remain
+   intact;
+6. record only synthetic test evidence in the release notes.
 
 ## Post-release verification
 
-- Download the DMG from the public update origin and verify its SHA-256 checksum.
+- Confirm the Release is marked stable/latest and its version matches `latest-mac.yml`.
+- Verify every checksum before installation.
 - Install on a clean Apple-Silicon Mac and confirm Gatekeeper acceptance.
-- Start from the previous supported version and exercise the explicit update button.
-- Verify that the existing local data path and original documents remain intact.
-- Confirm that the GitHub Release and update metadata show the same version.
-- Record the result in the release notes without attaching real financial data.
+- Exercise the explicit update path from the previous supported release.
+- Confirm update logs and workflow artifacts contain no financial data or secrets.
+- Confirm original documents and the established local data path remain unchanged.
 
-## Rollback
+## Rollback and withdrawal
 
-Do not overwrite a published versioned artifact. If the release is unsafe:
+Never overwrite a published versioned artifact or silently replace its manifest.
 
-1. stop promotion by withholding or replacing only channel metadata with the last known-good
-   version;
-2. mark the GitHub Release as withdrawn and explain the affected versions;
-3. preserve artifacts and logs needed for investigation without exposing secrets;
-4. ship a higher patch version after validation;
-5. use a tested data migration or restore path—never delete the local data directory as a fix.
+If a release is unsafe before broad installation:
+
+1. mark the affected Release as a prerelease or draft so it is no longer the stable latest release;
+2. mark the previous known-good Release as latest to stop further promotion;
+3. preserve the affected artifacts and workflow evidence for investigation;
+4. publish a higher patch version containing the revert or fix.
+
+Already updated clients do not downgrade automatically. Recovery for them is always a higher,
+signed patch version with backward-compatible data handling. Never delete or replace the local data
+directory as a rollback mechanism.
 
 ## Current blocker
 
-As of 28 August 2026, only the non-sensitive `FINANCE_OS_UPDATE_PREFIX=mac/arm64` variable is
-configured. All release secrets and the URL, bucket, and region variables are still absent.
-GitHub-hosted jobs also do not start because the account reports a payment/spending-limit problem.
-No signed release may be published until both conditions are resolved.
+GitHub Actions and normal CI are operational. The remaining external blocker is the absence of the
+five Apple Developer ID and App Store Connect secrets listed above. Until they are configured and a
+tag workflow passes signature and notarization verification, `0.2.0` remains an unpublished
+bootstrap candidate and must not be represented as an available secure download.
