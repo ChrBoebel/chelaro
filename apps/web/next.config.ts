@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Node.js 24 prefers the module-sync export from @swc/helpers. Next's file tracer currently
+  // records only the CommonJS helper, so the standalone server otherwise fails before listening.
+  outputFileTracingIncludes: {
+    "/*": ["../../node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers/esm/**/*"],
+  },
   poweredByHeader: false,
   async headers() {
     return [

@@ -44,6 +44,8 @@ jobs:
         run: pnpm quality:agent
       - name: Build
         run: pnpm build:web
+      - name: Smoke-test standalone web runtime
+        run: pnpm smoke:web:standalone
       - name: Audit dependencies
         run: pnpm audit:web
 
