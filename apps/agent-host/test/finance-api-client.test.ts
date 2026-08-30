@@ -190,9 +190,35 @@ test("stops buffering oversized responses and redacts upstream failures", async 
     () => rejected.call("finance_list_transactions", {}),
     (error: unknown) =>
       error instanceof FinanceApiClientError &&
-      error.code === "rejected" &&
+      error.code === "invalid_request" &&
+      error.httpStatus === 422 &&
       !error.message.includes("sensitive"),
   );
+});
+
+test("classifies authorization and server failures without exposing response bodies", async () => {
+  const responses = [
+    { expectedCode: "unauthorized", status: 403 },
+    { expectedCode: "unavailable", status: 503 },
+  ] as const;
+
+  for (const fixture of responses) {
+    const origin = await startServer((_request, response) => {
+      response.writeHead(fixture.status, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: { message: "private synthetic upstream detail" } }));
+    });
+    const client = new FinanceApiClient({ baseUrl: origin });
+    client.setCredential(token);
+
+    await assert.rejects(
+      () => client.call("finance_list_transactions", {}),
+      (error: unknown) =>
+        error instanceof FinanceApiClientError &&
+        error.code === fixture.expectedCode &&
+        error.httpStatus === fixture.status &&
+        !error.message.includes("private synthetic"),
+    );
+  }
 });
 
 test("fails closed on timeouts and redirects", async () => {
