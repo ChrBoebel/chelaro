@@ -7,14 +7,7 @@ const UPDATE_CHANNELS = Object.freeze({
   stateChanged: "finance-os:update:state-changed",
 });
 
-const EXTERNAL_LINK_CHANNELS = Object.freeze({
-  openOpenAiLogin: "finance-os:external:open-openai-login",
-});
-
 contextBridge.exposeInMainWorld("financeOS", {
-  external: {
-    openOpenAiLogin: (url) => ipcRenderer.invoke(EXTERNAL_LINK_CHANNELS.openOpenAiLogin, url),
-  },
   platform: process.platform,
   updates: {
     getState: () => ipcRenderer.invoke(UPDATE_CHANNELS.getState),

@@ -12,6 +12,8 @@ cleanup() {
 trap cleanup EXIT
 
 pnpm --dir "$repository_root" build:web
+pnpm --dir "$repository_root" build:agent-host
+pnpm --dir "$repository_root" --filter @finance-os/agent-host --prod --legacy deploy "$staging_root/agent-host"
 uv run --project "$repository_root/apps/api" pyinstaller \
   --noconfirm \
   --clean \
@@ -34,6 +36,10 @@ if [[ ! -f "$web_destination/apps/web/server.js" ]]; then
   echo "Standalone Next.js server was not generated." >&2
   exit 1
 fi
+if [[ ! -f "$staging_root/agent-host/dist/src/main.js" ]]; then
+  echo "Embedded finance agent host was not generated." >&2
+  exit 1
+fi
 
 if [[ "$runtime_root" != "$repository_root/apps/desktop/.runtime" ]]; then
   echo "Refusing to replace unexpected runtime path: $runtime_root" >&2
@@ -43,5 +49,6 @@ mkdir -p "$runtime_root"
 find "$runtime_root" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
 cp -R "$staging_root/api" "$runtime_root/api"
 cp -R "$staging_root/web" "$runtime_root/web"
+cp -R "$staging_root/agent-host" "$runtime_root/agent-host"
 
 echo "Prepared embedded Chelaro runtime in $runtime_root"

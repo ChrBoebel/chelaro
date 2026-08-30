@@ -12,7 +12,7 @@ if (!existsSync(codexEntry) || !existsSync(codexPackagePath)) {
   throw new Error("Pinned @openai/codex dependency is missing; run pnpm install first.");
 }
 const metadata = JSON.parse(readFileSync(codexPackagePath, "utf8"));
-if (metadata.version !== "0.149.1") throw new Error("Unexpected Codex package version.");
+if (metadata.version !== "0.151.0") throw new Error("Unexpected Codex package version.");
 
 const temporaryRoot = mkdtempSync(join(tmpdir(), "finance-os-codex-experimental-"));
 try {

@@ -1,11 +1,10 @@
-import { createHash } from "node:crypto";
-import { execFileSync, spawnSync } from "node:child_process";
-import { accessSync, constants, readFileSync, realpathSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { accessSync, constants, realpathSync } from "node:fs";
+
+import { SUPPORTED_CODEX_VERSION } from "./codex-provider.js";
 
 export const SUPPORTED_MACOS_VERSION = "15.6";
 export const SUPPORTED_ARCHITECTURE = "arm64";
-export const PINNED_CODEX_VERSION = "0.149.1";
-export const OPENAI_TEAM_IDENTIFIER = "2DC432GLL2";
 
 export interface PlatformIdentity {
   platform: NodeJS.Platform;
@@ -21,10 +20,7 @@ export interface ChildEnvironmentOptions {
 }
 
 export interface CodexBinaryIdentity {
-  architecture: string;
   path: string;
-  sha256: string;
-  teamIdentifier: string;
   version: string;
 }
 
@@ -51,8 +47,7 @@ export function assertSupportedPlatform(identity = readPlatformIdentity()): void
   }
 }
 
-export function assertPinnedCodexBinary(binaryPath: string): CodexBinaryIdentity {
-  assertSupportedPlatform();
+export function assertSupportedCodexBinary(binaryPath: string): CodexBinaryIdentity {
   const canonicalPath = realpathSync(binaryPath);
   accessSync(canonicalPath, constants.X_OK);
 
@@ -60,35 +55,13 @@ export function assertPinnedCodexBinary(binaryPath: string): CodexBinaryIdentity
     encoding: "utf8",
     timeout: 5_000,
   }).trim();
-  if (version !== `codex-cli ${PINNED_CODEX_VERSION}`) {
+  if (version !== `codex-cli ${SUPPORTED_CODEX_VERSION}`) {
     throw new Error(`Unexpected Codex version: ${version}`);
   }
 
-  const signature = spawnSync("/usr/bin/codesign", ["-dvvv", canonicalPath], {
-    encoding: "utf8",
-    timeout: 5_000,
-  });
-  const signatureDetails = `${signature.stdout ?? ""}\n${signature.stderr ?? ""}`;
-  if (signature.status !== 0) {
-    throw new Error(`Codex signature verification failed: ${signatureDetails.trim()}`);
-  }
-  for (const expected of [
-    "Identifier=codex",
-    `TeamIdentifier=${OPENAI_TEAM_IDENTIFIER}`,
-    `Authority=Developer ID Application: OpenAI OpCo, LLC (${OPENAI_TEAM_IDENTIFIER})`,
-    "Format=Mach-O thin (arm64)",
-  ]) {
-    if (!signatureDetails.includes(expected)) {
-      throw new Error(`Codex signature is missing ${expected}`);
-    }
-  }
-
   return {
-    architecture: SUPPORTED_ARCHITECTURE,
     path: canonicalPath,
-    sha256: createHash("sha256").update(readFileSync(canonicalPath)).digest("hex"),
-    teamIdentifier: OPENAI_TEAM_IDENTIFIER,
-    version: PINNED_CODEX_VERSION,
+    version: SUPPORTED_CODEX_VERSION,
   };
 }
 

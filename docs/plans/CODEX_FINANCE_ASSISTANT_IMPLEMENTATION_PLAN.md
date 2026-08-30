@@ -1,5 +1,10 @@
 # Codex finance assistant implementation plan
 
+> Historical implementation plan. ADR 0011 supersedes the separate device-login, app-owned
+> `CODEX_HOME`, bundled production CLI, source-only, and multi-PR delivery assumptions. The current
+> implementation reuses a compatible system Codex CLI and its existing login in both source and
+> packaged desktop modes.
+
 ## Goal
 
 Ship a German-first, T3-style chat in Chelaro where Codex helps the owner understand and organize

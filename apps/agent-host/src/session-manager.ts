@@ -3,7 +3,7 @@ export const MAX_ISSUED_RESOURCE_IDS = 256;
 export type HostStatus = "starting" | "ready" | "degraded" | "stopping" | "stopped";
 export type AppServerStatus = "stopped" | "starting" | "ready" | "stopping" | "crashed";
 export type ConsentStatus = "unknown" | "granted" | "revoke_pending" | "revoked";
-export type AuthStatus = "unknown" | "logged_out" | "login_pending" | "authenticated";
+export type AuthStatus = "unknown" | "logged_out" | "authenticated";
 export type SessionStatus = "starting" | "ready" | "context_lost" | "closed";
 export type TurnStatus =
   | "starting"
@@ -99,8 +99,7 @@ const appServerTransitions = {
 
 const authTransitions = {
   unknown: ["logged_out", "authenticated"],
-  logged_out: ["unknown", "login_pending", "authenticated"],
-  login_pending: ["unknown", "logged_out", "authenticated"],
+  logged_out: ["unknown", "authenticated"],
   authenticated: ["unknown", "logged_out"],
 } as const satisfies Record<AuthStatus, readonly AuthStatus[]>;
 

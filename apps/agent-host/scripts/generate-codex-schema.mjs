@@ -23,7 +23,7 @@ if (!existsSync(codexEntry) || !existsSync(codexPackagePath)) {
   throw new Error("Pinned @openai/codex dependency is missing; run pnpm install first.");
 }
 const codexPackage = JSON.parse(readFileSync(codexPackagePath, "utf8"));
-if (codexPackage.version !== "0.149.1" || codexPackage.license !== "Apache-2.0") {
+if (codexPackage.version !== "0.151.0" || codexPackage.license !== "Apache-2.0") {
   throw new Error("Unexpected @openai/codex version or license metadata.");
 }
 

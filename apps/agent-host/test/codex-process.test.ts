@@ -4,9 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { CodexProcess, CodexProcessError } from "../src/codex-process.js";
+import { buildCodexAppServerArguments, CodexProcess, CodexProcessError } from "../src/codex-process.js";
 
 const fakeRuntime = new URL("./fake-codex-runtime.js", import.meta.url).pathname;
+
+test("codex process: disables global hooks and plugin features before App Server startup", () => {
+  const argumentsList = buildCodexAppServerArguments();
+  assert.equal(argumentsList.includes("features.hooks=false"), true);
+  assert.equal(argumentsList.includes("features.plugins=false"), true);
+  assert.equal(argumentsList.includes("skills.include_instructions=false"), true);
+});
 
 function fixture(options: { badIdentity?: boolean; onFatalError?: (error: Error) => void } = {}) {
   const root = mkdtempSync(join(tmpdir(), "chelaro-finance-codex-process-"));
@@ -66,11 +73,13 @@ test("codex process: protocol drift fails closed and leaves no running child", a
 
 test("codex process: unknown notifications fail the live protocol closed", async (t) => {
   const failures: Error[] = [];
-  const state = fixture({ onFatalError: (error) => failures.push(error) });
+  let resolveFailure: (() => void) | undefined;
+  const failure = new Promise<void>((resolve) => { resolveFailure = resolve; });
+  const state = fixture({ onFatalError: (error) => { failures.push(error); resolveFailure?.(); } });
   t.after(async () => { await state.runtime.stop(); state.cleanup(); });
   await state.runtime.start();
   await state.runtime.request("test/badNotification", {});
-  await new Promise((resolve) => setImmediate(resolve));
+  await failure;
   assert.equal(state.runtime.status, "crashed");
   assert.equal(failures.length, 1);
 });

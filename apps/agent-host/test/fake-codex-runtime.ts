@@ -12,7 +12,7 @@ input.on("line", (line) => {
       codexHome: process.env.CODEX_HOME,
       platformFamily: "unix",
       platformOs: badIdentity ? "linux" : "macos",
-      userAgent: "finance-os/0.149.1 (fake)",
+      userAgent: "finance-os/0.151.0 (fake) unknown (finance-os; 0.1.0)",
     });
     notify("account/updated", { authMode: null, planType: null });
     return;

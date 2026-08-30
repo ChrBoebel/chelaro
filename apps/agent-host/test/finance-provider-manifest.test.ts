@@ -13,9 +13,11 @@ import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 
 import { FINANCE_DYNAMIC_TOOLS } from "../src/finance-tool-contract.js";
+import { buildCodexAppServerArguments } from "../src/codex-process.js";
 import {
   buildFinanceInitializeParams,
   buildFinanceThreadStartParams,
+  configuredMcpServerNames,
 } from "../src/finance-thread-contract.js";
 import { JsonRpcClient } from "../src/json-rpc-client.js";
 
@@ -64,8 +66,11 @@ test("provider edge: real App Server exposes exactly the eight finance tools", a
     "[analytics]",
     "enabled = false",
     "",
+    "[mcp_servers.untrusted_global]",
+    'command = "/usr/bin/false"',
+    "",
   ].join("\n"), { mode: 0o600 });
-  const child = spawn(process.execPath, [codexEntry, "app-server", "--stdio", "--strict-config"], {
+  const child = spawn(process.execPath, [codexEntry, ...buildCodexAppServerArguments()], {
     cwd: temporaryRoot,
     env: {
       CODEX_HOME: codexHome,
@@ -90,7 +95,14 @@ test("provider edge: real App Server exposes exactly the eight finance tools", a
 
   try {
     await rpc.request("initialize", buildFinanceInitializeParams("0.1.0"));
-    const started = await rpc.request("thread/start", buildFinanceThreadStartParams()) as {
+    const configuration = await rpc.request("config/read", {
+      cwd: temporaryRoot,
+      includeLayers: false,
+    });
+    const started = await rpc.request(
+      "thread/start",
+      buildFinanceThreadStartParams(undefined, configuredMcpServerNames(configuration)),
+    ) as {
       thread: { id: string };
     };
     await rpc.request("turn/start", {

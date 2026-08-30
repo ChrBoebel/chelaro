@@ -5,9 +5,6 @@ type ChelaroUpdateState =
 
 interface Window {
   financeOS?: {
-    external?: {
-      openOpenAiLogin(url: string): Promise<boolean>;
-    };
     platform: string;
     updates: {
       getState(): Promise<ChelaroUpdateState>;

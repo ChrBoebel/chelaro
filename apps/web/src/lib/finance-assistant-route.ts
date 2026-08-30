@@ -7,8 +7,7 @@ export type FinanceAssistantJsonPath =
   | "/v1/status"
   | "/v1/consent/grant"
   | "/v1/consent/revoke"
-  | "/v1/auth/login"
-  | "/v1/auth/logout"
+  | "/v1/provider/refresh"
   | "/v1/sessions"
   | `/v1/sessions/${string}`
   | "/v1/turns"

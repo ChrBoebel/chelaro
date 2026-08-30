@@ -43,15 +43,17 @@ class StubProcess {
           account: { email: null, planType: "plus", type: "chatgpt" },
           requiresOpenaiAuth: true,
         };
+      case "config/read":
+        return { config: { mcp_servers: {} }, layers: null, origins: {} };
       case "thread/start":
         return safeThread(this.#runtimeDirectory);
       case "turn/start":
         if (this.earlyTurn) this.#emitCompletedTurn();
         return { turn: turn("provider_turn_1", "inProgress", []) };
       case "turn/interrupt":
-      case "thread/close":
-      case "account/logout":
         return {};
+      case "thread/unsubscribe":
+        return { status: "unsubscribed" };
       default:
         throw new Error(`Unexpected synthetic method: ${method}`);
     }
@@ -177,6 +179,8 @@ test("finance agent service: runs consent-bound chat and tool callbacks without 
   assert.equal(state.service.snapshot().turn?.status, "completed");
   assert.equal(state.events.some((event) => event.type === "assistant.message.completed"), true);
   assert.equal(JSON.stringify(state.service.snapshot()).includes("provider_"), false);
+  await state.service.closeSession("session_1");
+  assert.equal(state.process().calls.at(-1)?.method, "thread/unsubscribe");
 });
 
 test("finance agent service: replays bounded early notifications only after turn binding", async (t) => {
@@ -204,6 +208,7 @@ test("finance agent service: durable revocation interrupts, closes, and stops be
     auth: "unknown",
     consent: { status: "revoked", version: "2026-08-28.v1" },
     host: "ready",
+    provider: { status: "ready", version: "test" },
     session: { id: "session_1", status: "closed" },
     turn: { id: "turn_1", status: "interrupted" },
   });
@@ -235,7 +240,7 @@ test("finance agent service: startup recovery keeps revoke-pending denied until 
   assert.equal(state.journal.load().status, "revoked");
 });
 
-test("finance agent service: provider logout aborts active work and loses the session context", async (t) => {
+test("finance agent service: shared account loss aborts active work and loses the session context", async (t) => {
   const state = fixture();
   t.after(async () => { await state.service.stop(); state.cleanup(); });
   await readyService(state);
@@ -280,7 +285,7 @@ function safeThread(runtimeDirectory: string): Record<string, unknown> {
     thread: {
       agentNickname: null,
       agentRole: null,
-      cliVersion: "0.149.1",
+      cliVersion: "0.151.0",
       createdAt: 1,
       cwd: runtimeDirectory,
       ephemeral: true,

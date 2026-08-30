@@ -34,23 +34,12 @@ class SyntheticFinanceProcess {
   async request(method: string): Promise<unknown> {
     switch (method) {
       case "account/read":
-        return { account: null, requiresOpenaiAuth: true };
-      case "account/login/start": {
-        const loginId = "login_e2e_1";
-        const timer = setTimeout(() => {
-          this.#callbacks.onNotification({
-            method: "account/login/completed",
-            params: { error: null, loginId, onboardingEntrypoint: null, success: true },
-          });
-        }, 750);
-        timer.unref();
         return {
-          loginId,
-          type: "chatgptDeviceCode",
-          userCode: "E2E1-TEST",
-          verificationUrl: "https://auth.openai.com/device",
+          account: { email: null, planType: "plus", type: "chatgpt" },
+          requiresOpenaiAuth: true,
         };
-      }
+      case "config/read":
+        return { config: { mcp_servers: {} }, layers: null, origins: {} };
       case "thread/start":
         return safeThread(this.#runtimeDirectory);
       case "turn/start": {
@@ -66,9 +55,9 @@ class SyntheticFinanceProcess {
         return { turn: turn(providerTurnId, "inProgress", []) };
       }
       case "turn/interrupt":
-      case "thread/close":
-      case "account/logout":
         return {};
+      case "thread/unsubscribe":
+        return { status: "unsubscribed" };
       default:
         throw new Error(`Unexpected E2E process request: ${method}`);
     }
@@ -195,7 +184,7 @@ function safeThread(runtimeDirectory: string): Record<string, unknown> {
     thread: {
       agentNickname: null,
       agentRole: null,
-      cliVersion: "0.149.1",
+      cliVersion: "0.151.0",
       createdAt: 1,
       cwd: runtimeDirectory,
       ephemeral: true,

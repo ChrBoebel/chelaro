@@ -8,6 +8,7 @@ const baseSnapshot = {
   auth: "logged_out",
   consent: { status: "unknown", version: null },
   host: "ready",
+  provider: { status: "ready", version: "0.151.0" },
   session: null,
   turn: null,
 };
@@ -70,45 +71,42 @@ describe("FinanceAssistant", () => {
     expect(screen.getByText("Keine Änderung ohne deine Prüfung")).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Zustimmen und fortfahren" }));
 
-    expect(await screen.findByRole("heading", { name: "Mit ChatGPT verbinden" })).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "Codex-Anmeldung erforderlich" })).toBeDefined();
+    expect(screen.getByText("codex login")).toBeDefined();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/assistant/consent/grant",
       expect.objectContaining({ method: "POST" }),
     );
   });
 
-  it("opens only a validated OpenAI device login URL through the desktop bridge", async () => {
+  it("rechecks the installed Codex CLI instead of starting a separate login", async () => {
     const consented = {
       ...baseSnapshot,
       consent: { status: "granted", version: "2026-08-28.v1" },
     };
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
-      if (String(input).endsWith("/auth/login")) {
-        return jsonResponse({
-          login: {
-            status: "login_pending",
-            userCode: "ABCD-EFGH",
-            verificationUrl: "https://auth.openai.com/device",
-          },
-        });
+      if (String(input).endsWith("/provider/refresh")) {
+        return jsonResponse({ snapshot: { ...consented, auth: "authenticated" } });
       }
       return jsonResponse({ snapshot: consented });
     }));
-    const openOpenAiLogin = vi.fn(async () => true);
-    window.financeOS = {
-      external: { openOpenAiLogin },
-      platform: "darwin",
-      updates: disabledUpdates(),
-    };
 
     render(<FinanceAssistant />);
-    fireEvent.click(await screen.findByRole("button", { name: "Gerätecode anfordern" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Status erneut prüfen" }));
+    expect(await screen.findByRole("heading", { name: "Beginne eine private Unterhaltung." })).toBeDefined();
+  });
 
-    expect(await screen.findByText("ABCD-EFGH")).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Anmeldung öffnen" }));
-    await waitFor(() => {
-      expect(openOpenAiLogin).toHaveBeenCalledWith("https://auth.openai.com/device");
-    });
+  it("keeps the workspace usable when Codex is not installed", async () => {
+    const unavailable = {
+      ...baseSnapshot,
+      appServer: "stopped",
+      consent: { status: "granted", version: "2026-08-28.v1" },
+      provider: { status: "not_found", version: null },
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ snapshot: unavailable })));
+    render(<FinanceAssistant />);
+    expect(await screen.findByRole("heading", { name: "Codex wurde nicht gefunden" })).toBeDefined();
+    expect(screen.getByText(/übrigen Finanzfunktionen bleiben nutzbar/)).toBeDefined();
   });
 
   it("streams bound plain-text finance answers and keeps mutations review-only", async () => {
@@ -187,13 +185,4 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json" },
   });
-}
-
-function disabledUpdates() {
-  return {
-    getState: async () => ({ status: "disabled" as const }),
-    download: async () => ({ status: "disabled" as const }),
-    install: async () => ({ status: "disabled" as const }),
-    subscribe: () => () => undefined,
-  };
 }

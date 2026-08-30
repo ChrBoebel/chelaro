@@ -12,6 +12,7 @@ import {
   assertFinanceThreadStartParams,
   buildFinanceInitializeParams,
   buildFinanceThreadStartParams,
+  configuredMcpServerNames,
 } from "../src/finance-thread-contract.js";
 
 test("finance thread opts into only the required experimental API", () => {
@@ -64,6 +65,25 @@ test("finance thread disables every non-finance capability and contains finance-
   assert.match(params.baseInstructions ?? "", /prüfpflichtige Vorschläge/);
   assert.match(params.developerInstructions ?? "", /exakt aus der Nutzereingabe/);
   assert.match(params.developerInstructions ?? "", /ohne Markdown-Markierungen/);
+});
+
+test("finance thread disables every MCP inherited from the shared Codex home", () => {
+  const names = configuredMcpServerNames({
+    config: { mcp_servers: { local_docs: { command: "unsafe" }, remote_data: { url: "https://example.invalid" } } },
+    layers: null,
+    origins: {},
+  });
+  assert.deepEqual(names, ["local_docs", "remote_data"]);
+  const params = buildFinanceThreadStartParams(undefined, names);
+  assert.deepEqual(params.config?.mcp_servers, {
+    local_docs: { enabled: false },
+    remote_data: { enabled: false },
+  });
+  assert.doesNotThrow(() => assertFinanceThreadStartParams(params));
+  assert.throws(
+    () => configuredMcpServerNames({ config: { mcp_servers: { "invalid.name": {} } } }),
+    FinanceThreadContractError,
+  );
 });
 
 test("finance thread validation rejects extra fields, environments, and changed config", () => {

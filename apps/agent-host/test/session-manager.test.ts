@@ -203,7 +203,7 @@ test("finance chat lifecycle: preserves a recovered revoke-pending deny barrier"
   );
 });
 
-test("finance chat lifecycle: logout fails active work and prevents new turns", () => {
+test("finance chat lifecycle: shared account loss fails active work and prevents new turns", () => {
   const loggedOut = reduceFinanceChatState(runningTurn(), { type: "auth.status", status: "logged_out" });
   assert.equal(loggedOut.session?.status, "context_lost");
   assert.equal(loggedOut.turn?.status, "failed");

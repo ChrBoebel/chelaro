@@ -215,6 +215,7 @@ export async function startFinanceServices(
     agentHostEntryPath,
     environment = process.env,
     prepareDatabase = true,
+    userHome = environment.HOME,
   } = {},
 ) {
   const apiWasRunning = await isFinanceApiAvailable();
@@ -253,6 +254,7 @@ export async function startFinanceServices(
         financeApiToken: credentials.financeAssistantToken,
         financeApiUrl: "http://127.0.0.1:8000/",
         hostEntryPath: agentHostEntryPath,
+        userHome,
       });
     } catch (error) {
       console.error(
@@ -288,9 +290,11 @@ export async function startFinanceAgentHost(
     financeApiToken,
     financeApiUrl,
     hostEntryPath,
+    userHome,
   },
 ) {
   if (!path.isAbsolute(agentDataRoot)) throw new Error("Agent data root must be absolute.");
+  if (typeof userHome !== "string" || !path.isAbsolute(userHome)) throw new Error("User home must be absolute.");
   const gatewayToken = randomBytes(32).toString("hex");
   const requestId = randomBytes(16).toString("hex");
   const hostPath = hostEntryPath ?? path.join(
@@ -313,12 +317,15 @@ export async function startFinanceAgentHost(
     (message) => isConfiguredHostMessage(message, requestId),
   );
   child.send({
+    codexBinaryPath: validCodexBinaryPath(environment.FINANCE_OS_CODEX_BINARY_PATH),
+    codexHome: validCodexHome(environment.CODEX_HOME, userHome),
     financeApiToken,
     financeApiUrl,
     gatewayToken,
     protocolVersion: HOST_IPC_PROTOCOL_VERSION,
     requestId,
     type: "finance.configure",
+    userHome,
   });
   const configured = await configuredMessage;
   return { gatewayOrigin: configured.gatewayOrigin, gatewayToken };
@@ -364,10 +371,41 @@ export function webEnvironment(environment, ownerToken, assistant) {
 
 export function hostEnvironment(environment, agentDataRoot) {
   const result = { FINANCE_OS_AGENT_DATA_ROOT: agentDataRoot };
-  for (const name of ["LANG", "LC_ALL", "PATH", "SystemRoot", "TMPDIR"]) {
+  for (const name of ["LANG", "LC_ALL", "SystemRoot", "TMPDIR"]) {
     if (typeof environment[name] === "string") result[name] = environment[name];
   }
+  if (environment.ELECTRON_RUN_AS_NODE === "1") result.ELECTRON_RUN_AS_NODE = "1";
+  result.PATH = codexSearchPath(environment.PATH);
   return result;
+}
+
+function codexSearchPath(inherited) {
+  const entries = [
+    ...(typeof inherited === "string" ? inherited.split(path.delimiter) : []),
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "/usr/bin",
+    "/bin",
+    "/usr/sbin",
+    "/sbin",
+  ].filter((entry) => entry.length > 0 && path.isAbsolute(entry));
+  return [...new Set(entries)].join(path.delimiter);
+}
+
+function validCodexBinaryPath(value) {
+  if (value === undefined || value === "") return "codex";
+  if (typeof value !== "string" || value.length > 4_096 || /[\r\n\0]/.test(value)) {
+    throw new Error("Codex binary path is invalid.");
+  }
+  return value;
+}
+
+function validCodexHome(value, userHome) {
+  if (value === undefined || value === "") return path.join(userHome, ".codex");
+  if (typeof value !== "string" || !path.isAbsolute(value) || value.length > 4_096 || /[\r\n\0]/.test(value)) {
+    throw new Error("CODEX_HOME is invalid.");
+  }
+  return path.resolve(value);
 }
 
 function withoutAssistantCapabilities(environment) {
@@ -483,14 +521,14 @@ function isExactRecord(value, expected) {
 
 export async function startPackagedFinanceServices(
   processManager,
-  { resourcesPath, userDataPath, executablePath },
+  { resourcesPath, userDataPath, executablePath, userHome, environment = process.env },
 ) {
   const apiPort = await findAvailablePort();
   let webPort = await findAvailablePort();
   while (webPort === apiPort) webPort = await findAvailablePort();
   const apiUrl = `http://127.0.0.1:${apiPort}`;
   const webUrl = `http://127.0.0.1:${webPort}`;
-  const runtimeToken = randomBytes(32).toString("hex");
+  const credentials = createSourceCredentials();
   const dataPath = path.join(userDataPath, "data");
   const apiExecutable = path.join(
     resourcesPath,
@@ -504,7 +542,8 @@ export async function startPackagedFinanceServices(
     FINANCE_OS_ENV: "production",
     FINANCE_OS_API_HOST: "127.0.0.1",
     FINANCE_OS_API_PORT: String(apiPort),
-    FINANCE_OS_API_TOKEN: runtimeToken,
+    FINANCE_OS_API_TOKEN: credentials.ownerToken,
+    FINANCE_OS_FINANCE_ASSISTANT_TOKEN: credentials.financeAssistantToken,
     FINANCE_OS_DATABASE_URL: sqliteDatabaseUrl(path.join(dataPath, "finance-os.sqlite3")),
     FINANCE_OS_DOCUMENT_ROOT: path.join(dataPath, "documents"),
     FINANCE_OS_QUARANTINE_ROOT: path.join(dataPath, "quarantine"),
@@ -522,13 +561,34 @@ export async function startPackagedFinanceServices(
     },
   });
 
+  let assistant;
+  try {
+    assistant = await startFinanceAgentHost(processManager, {
+      agentDataRoot: path.join(userDataPath, "finance-assistant"),
+      environment: { ...environment, ELECTRON_RUN_AS_NODE: "1" },
+      financeApiToken: credentials.financeAssistantToken,
+      financeApiUrl: `${apiUrl}/`,
+      hostEntryPath: path.join(resourcesPath, "runtime/agent-host/dist/src/main.js"),
+      userHome,
+    });
+  } catch (error) {
+    console.error(
+      "[desktop] Finanzassistent bleibt deaktiviert:",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
   processManager.startExecutable("eingebettete Chelaro-Oberfläche", executablePath, [webServer], {
     cwd: path.dirname(webServer),
     env: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: "1",
       FINANCE_OS_API_URL: apiUrl,
-      FINANCE_OS_API_TOKEN: runtimeToken,
+      FINANCE_OS_API_TOKEN: credentials.ownerToken,
+      ...(assistant ? {
+        FINANCE_OS_FINANCE_GATEWAY_TOKEN: assistant.gatewayToken,
+        FINANCE_OS_FINANCE_GATEWAY_URL: assistant.gatewayOrigin,
+      } : {}),
       HOSTNAME: "127.0.0.1",
       NODE_ENV: "production",
       PORT: String(webPort),
@@ -538,7 +598,7 @@ export async function startPackagedFinanceServices(
     validate: async (response) => response.ok && (await response.text()).includes("Chelaro"),
   });
 
-  return { apiWasRunning: false, webWasRunning: false, webUrl };
+  return { apiWasRunning: false, assistantAvailable: Boolean(assistant), webWasRunning: false, webUrl };
 }
 
 export async function findAvailablePort(host = "127.0.0.1") {

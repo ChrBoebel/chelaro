@@ -3,7 +3,8 @@
 ## Status
 
 Accepted for Phase 0 on 2026-08-28 after independent senior review. Later phases remain blocked
-until the Phase-0 gates in the reviewed implementation plan pass.
+until the Phase-0 gates in the reviewed implementation plan pass. Authentication, `CODEX_HOME`,
+and desktop runtime integration are superseded by ADR 0011.
 
 ## Context
 
