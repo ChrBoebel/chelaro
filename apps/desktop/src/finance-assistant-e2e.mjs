@@ -22,9 +22,6 @@ export async function runFinanceAssistantE2e(window, { dataRoot }) {
     await clickButton(window, "Assistent");
     await waitForText(window, "Du entscheidest, was geteilt wird.");
     await clickButton(window, "Zustimmen und fortfahren");
-    await waitForText(window, "Gerätecode anfordern");
-    await clickButton(window, "Gerätecode anfordern");
-    await waitForText(window, "E2E1-TEST");
     await waitForText(window, "Neue Unterhaltung");
     await clickButton(window, "Neue Unterhaltung");
     await waitForText(window, "Wobei darf ich dir helfen?");
@@ -117,7 +114,7 @@ export async function runFinanceAssistantE2e(window, { dataRoot }) {
       assistantAnswerStreamed: true,
       canonicalDataUnchangedBeforeApproval: true,
       consentCompleted: true,
-      deviceLoginCompleted: true,
+      sharedCodexLoginReused: true,
       financeToolProposalCreated: true,
       ownerApprovalCreatedReceivable: true,
       receivableAuditLinkedToProposal: true,

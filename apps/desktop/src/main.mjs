@@ -1,16 +1,10 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeFile } from "node:fs/promises";
-import { execFile } from "node:child_process";
 
 import { existsSync } from "node:fs";
 
-import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from "electron";
-
-import {
-  createExternalLinkManager,
-  createPlatformExternalOpener,
-} from "./external-links.mjs";
+import { app, BrowserWindow, dialog, ipcMain, Menu, session } from "electron";
 import { loadingPageUrl } from "./loading-page.mjs";
 import { runFinanceAssistantE2e } from "./finance-assistant-e2e.mjs";
 import {
@@ -46,12 +40,6 @@ let appOrigin;
 let shutdownComplete = false;
 let shutdownPromise;
 let updateManager;
-let externalLinkManager;
-const openExternal = createPlatformExternalOpener({
-  execFile,
-  platform: process.platform,
-  shellOpenExternal: (url, options) => shell.openExternal(url, options),
-});
 
 async function loadConfiguredUpdater() {
   const configurationPath = path.join(process.resourcesPath, "app-update.yml");
@@ -106,9 +94,11 @@ async function bootstrap() {
           resourcesPath: process.resourcesPath,
           userDataPath: app.getPath("userData"),
           executablePath: process.execPath,
+          userHome: app.getPath("home"),
         })
       : await startFinanceServices(processManager, {
           agentDataRoot: path.join(app.getPath("userData"), "finance-assistant"),
+          userHome: app.getPath("home"),
           ...(financeAssistantE2e
             ? {
                 agentHostEntryPath: path.join(
@@ -199,12 +189,6 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
       callback(false);
     });
-    externalLinkManager = createExternalLinkManager({
-      getAppOrigin: () => appOrigin,
-      getWindow: () => mainWindow,
-      ipcMain,
-      openExternal,
-    });
     let updaterConfiguration = { updater: undefined, isEnabled: false };
     try {
       updaterConfiguration = await loadConfiguredUpdater();
@@ -228,7 +212,6 @@ if (!app.requestSingleInstanceLock()) {
 app.on("before-quit", (event) => {
   if (shutdownComplete) return;
   event.preventDefault();
-  externalLinkManager?.stop();
   updateManager?.stop();
   shutdownPromise ??= processManager.stopAll().finally(() => {
     shutdownComplete = true;

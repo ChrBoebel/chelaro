@@ -166,8 +166,16 @@ test("desktop partitions API, web, and host capabilities", () => {
   assert.deepEqual(hostEnvironment(inherited, "/tmp/chelaro-agent"), {
     FINANCE_OS_AGENT_DATA_ROOT: "/tmp/chelaro-agent",
     LANG: "de_DE.UTF-8",
-    PATH: "/usr/bin",
+    PATH: "/usr/bin:/opt/homebrew/bin:/usr/local/bin:/bin:/usr/sbin:/sbin",
   });
+  assert.equal(
+    hostEnvironment({ ...inherited, ELECTRON_RUN_AS_NODE: "1" }, "/tmp/chelaro-agent").ELECTRON_RUN_AS_NODE,
+    "1",
+  );
+  assert.equal(
+    hostEnvironment({ ...inherited, ELECTRON_RUN_AS_NODE: "true" }, "/tmp/chelaro-agent").ELECTRON_RUN_AS_NODE,
+    undefined,
+  );
 });
 
 test("finance host receives secrets only after its authenticated IPC handshake", async () => {
