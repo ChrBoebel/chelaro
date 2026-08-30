@@ -1,9 +1,4 @@
 const productionSigning = process.env.FINANCE_OS_SIGN_BUILD === "1";
-const updateUrl = process.env.FINANCE_OS_UPDATE_URL;
-
-if (updateUrl && new URL(updateUrl).protocol !== "https:") {
-  throw new Error("FINANCE_OS_UPDATE_URL must use HTTPS.");
-}
 
 module.exports = {
   appId: "com.chelaro.desktop",
@@ -45,13 +40,12 @@ module.exports = {
     sign: false,
   },
   artifactName: "Chelaro-${version}-${arch}.${ext}",
-  publish: updateUrl
-    ? [
-        {
-          provider: "generic",
-          url: updateUrl,
-          channel: "latest",
-        },
-      ]
-    : null,
+  publish: [
+    {
+      provider: "github",
+      owner: "ChrBoebel",
+      repo: "chelaro",
+      releaseType: "release",
+    },
+  ],
 };
