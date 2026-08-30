@@ -21,7 +21,8 @@ const MAX_ASSISTANT_MESSAGE_BYTES = 512 * 1024;
 type HostStatus = "starting" | "ready" | "degraded" | "stopping" | "stopped";
 type AppServerStatus = "stopped" | "starting" | "ready" | "stopping" | "crashed";
 type ConsentStatus = "unknown" | "granted" | "revoke_pending" | "revoked";
-type AuthStatus = "unknown" | "logged_out" | "login_pending" | "authenticated";
+type AuthStatus = "unknown" | "logged_out" | "authenticated";
+type ProviderStatus = "checking" | "ready" | "not_found" | "unsupported" | "error";
 type SessionStatus = "starting" | "ready" | "context_lost" | "closed";
 type TurnStatus = "starting" | "running" | "interrupting" | "interrupted" | "completed" | "failed";
 
@@ -30,14 +31,9 @@ interface FinanceAssistantSnapshot {
   auth: AuthStatus;
   consent: { status: ConsentStatus; version: string | null };
   host: HostStatus;
+  provider: { status: ProviderStatus; version: string | null };
   session: null | { id: string; status: SessionStatus };
   turn: null | { id: string; status: TurnStatus };
-}
-
-interface DeviceLogin {
-  status: AuthStatus;
-  userCode: string;
-  verificationUrl: string;
 }
 
 interface DisplayMessage {
@@ -58,7 +54,6 @@ interface ActiveStream {
 export function FinanceAssistant() {
   const [snapshot, setSnapshotState] = useState<FinanceAssistantSnapshot | null>(null);
   const [availability, setAvailability] = useState<"loading" | "ready" | "unavailable">("loading");
-  const [login, setLogin] = useState<DeviceLogin | null>(null);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [isWorking, setIsWorking] = useState(false);
@@ -76,7 +71,6 @@ export function FinanceAssistant() {
     }
     snapshotRef.current = next;
     setSnapshotState(next);
-    if (next.auth === "authenticated") setLogin(null);
   }, []);
 
   const applyEvent = useCallback((raw: string) => {
@@ -214,28 +208,6 @@ export function FinanceAssistant() {
     if (response) {
       streamsRef.current.clear();
       setMessages([]);
-      setLogin(null);
-    }
-  }
-
-  async function startLogin() {
-    const response = await runAction("/api/assistant/auth/login");
-    const next = parseDeviceLogin(response?.login);
-    if (next) setLogin(next);
-    else if (response) setNotice("Die Anmeldedaten konnten nicht sicher gelesen werden.");
-  }
-
-  async function openLogin(url: string) {
-    const external = window.financeOS?.external;
-    if (!external) {
-      const opened = window.open(url, "_blank", "noopener,noreferrer");
-      if (!opened) setNotice("Die Anmeldeseite konnte nicht geöffnet werden.");
-      return;
-    }
-    try {
-      await external.openOpenAiLogin(url);
-    } catch {
-      setNotice("Die Anmeldeseite konnte nicht geöffnet werden.");
     }
   }
 
@@ -308,11 +280,9 @@ export function FinanceAssistant() {
         actions={snapshot.consent.status === "granted" ? (
           <AssistantControls
             activeTurn={activeTurn}
-            authenticated={snapshot.auth === "authenticated"}
             hasLiveSession={Boolean(snapshot.session && snapshot.session.status !== "closed")}
             consentGranted={snapshot.consent.status === "granted"}
             onCloseSession={() => void closeSession()}
-            onLogout={() => void runAction("/api/assistant/auth/logout")}
             onRevoke={() => void revokeConsent()}
             working={isWorking}
           />
@@ -332,13 +302,12 @@ export function FinanceAssistant() {
           pending={snapshot.consent.status === "revoke_pending" || isWorking}
           onGrant={() => void grantConsent()}
         />
-      ) : snapshot.auth !== "authenticated" ? (
-        <LoginPanel
-          disabled={isWorking || snapshot.auth === "login_pending"}
-          login={login}
-          pending={snapshot.auth === "login_pending"}
-          onLogin={() => void startLogin()}
-          onOpenLogin={(url) => void openLogin(url)}
+      ) : snapshot.provider.status !== "ready" || snapshot.auth !== "authenticated" ? (
+        <ProviderPanel
+          disabled={isWorking}
+          provider={snapshot.provider}
+          authenticated={snapshot.auth === "authenticated"}
+          onRefresh={() => void runAction("/api/assistant/provider/refresh")}
         />
       ) : !sessionReady ? (
         <SessionPanel
@@ -387,49 +356,45 @@ function ConsentPanel({ pending, onGrant }: { pending: boolean; onGrant: () => v
   );
 }
 
-function LoginPanel({
+function ProviderPanel({
+  authenticated,
   disabled,
-  login,
-  onLogin,
-  onOpenLogin,
-  pending,
+  onRefresh,
+  provider,
 }: {
+  authenticated: boolean;
   disabled: boolean;
-  login: DeviceLogin | null;
-  onLogin: () => void;
-  onOpenLogin: (url: string) => void;
-  pending: boolean;
+  onRefresh: () => void;
+  provider: FinanceAssistantSnapshot["provider"];
 }) {
+  const title = provider.status === "not_found"
+    ? "Codex wurde nicht gefunden"
+    : provider.status === "unsupported"
+      ? "Codex-Version wird nicht unterstützt"
+      : provider.status === "error"
+        ? "Codex konnte nicht gestartet werden"
+        : provider.status === "checking"
+          ? "Codex wird geprüft"
+          : authenticated
+            ? "Codex ist bereit"
+            : "Codex-Anmeldung erforderlich";
   return (
     <div className="mt-5 rounded-panel border border-line bg-paper p-6 shadow-panel sm:p-8">
-      <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-accent">OpenAI-Anmeldung</p>
-      <h2 className="mt-3 text-2xl font-medium tracking-[-0.035em] text-ink">Mit ChatGPT verbinden</h2>
+      <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-accent">Lokale Codex CLI</p>
+      <h2 className="mt-3 text-2xl font-medium tracking-[-0.035em] text-ink">{title}</h2>
       <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
-        Die Anmeldung erfolgt im Browser über einen einmaligen Gerätecode. Chelaro zeigt keine Kontodaten an und speichert den Code nicht.
+        {provider.status === "not_found"
+          ? "Installiere die Codex CLI. Deine übrigen Finanzfunktionen bleiben nutzbar."
+          : provider.status === "unsupported"
+            ? `Installiert ist ${provider.version ?? "eine unbekannte Version"}; Chelaro benötigt die geprüfte Version 0.151.0.`
+            : "Chelaro verwendet dieselbe lokale Anmeldung wie deine Codex CLI. Führe bei Bedarf im Terminal codex login aus; Chelaro liest oder kopiert keine Anmeldedatei."}
       </p>
-      {login ? (
-        <div className="mt-6 flex flex-col gap-4 rounded-xl border border-accent/25 bg-accent/5 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold text-muted">Einmaliger Code</p>
-            <p className="mt-1 font-mono text-xl font-semibold tracking-[0.12em] text-ink">{login.userCode}</p>
-          </div>
-          <Button
-            size="regular"
-            onClick={() => onOpenLogin(login.verificationUrl)}
-          >
-            Anmeldung öffnen
-          </Button>
-        </div>
-      ) : (
-        <Button
-          size="regular"
-          className="mt-6"
-          disabled={disabled}
-          onClick={onLogin}
-        >
-          {pending ? "Anmeldung läuft …" : "Gerätecode anfordern"}
-        </Button>
-      )}
+      {provider.status === "ready" && !authenticated ? (
+        <code className="mt-5 block w-fit rounded-lg bg-surface px-4 py-3 font-mono text-sm text-ink">codex login</code>
+      ) : null}
+      <Button size="regular" className="mt-6" disabled={disabled} onClick={onRefresh}>
+        {disabled ? "Status wird geprüft …" : "Status erneut prüfen"}
+      </Button>
     </div>
   );
 }
@@ -547,20 +512,16 @@ function ChatPanel({
 
 function AssistantControls({
   activeTurn,
-  authenticated,
   consentGranted,
   hasLiveSession,
   onCloseSession,
-  onLogout,
   onRevoke,
   working,
 }: {
   activeTurn: boolean;
-  authenticated: boolean;
   consentGranted: boolean;
   hasLiveSession: boolean;
   onCloseSession: () => void;
-  onLogout: () => void;
   onRevoke: () => void;
   working: boolean;
 }) {
@@ -570,11 +531,6 @@ function AssistantControls({
       {hasLiveSession ? (
         <Button variant="secondary" disabled={working || activeTurn} onClick={onCloseSession}>
           Unterhaltung beenden
-        </Button>
-      ) : null}
-      {authenticated && !hasLiveSession ? (
-        <Button variant="secondary" disabled={working} onClick={onLogout}>
-          Von ChatGPT abmelden
         </Button>
       ) : null}
       <Button variant="danger" disabled={working} onClick={onRevoke}>
@@ -609,44 +565,23 @@ async function assistantRequest(path: string, init: RequestInit): Promise<Record
 }
 
 function parseSnapshot(value: unknown): FinanceAssistantSnapshot | null {
-  if (!isRecord(value) || !exactKeys(value, ["appServer", "auth", "consent", "host", "session", "turn"])) return null;
+  if (!isRecord(value) || !exactKeys(value, ["appServer", "auth", "consent", "host", "provider", "session", "turn"])) return null;
   if (
     !isOneOf(value.host, ["starting", "ready", "degraded", "stopping", "stopped"]) ||
     !isOneOf(value.appServer, ["stopped", "starting", "ready", "stopping", "crashed"]) ||
-    !isOneOf(value.auth, ["unknown", "logged_out", "login_pending", "authenticated"]) ||
+    !isOneOf(value.auth, ["unknown", "logged_out", "authenticated"]) ||
     !isRecord(value.consent) ||
     !exactKeys(value.consent, ["status", "version"]) ||
     !isOneOf(value.consent.status, ["unknown", "granted", "revoke_pending", "revoked"]) ||
     !(value.consent.version === null || typeof value.consent.version === "string") ||
+    !isRecord(value.provider) ||
+    !exactKeys(value.provider, ["status", "version"]) ||
+    !isOneOf(value.provider.status, ["checking", "ready", "not_found", "unsupported", "error"]) ||
+    !(value.provider.version === null || typeof value.provider.version === "string") ||
     !validSession(value.session) ||
     !validTurn(value.turn)
   ) return null;
   return value as unknown as FinanceAssistantSnapshot;
-}
-
-function parseDeviceLogin(value: unknown): DeviceLogin | null {
-  if (
-    !isRecord(value) ||
-    !exactKeys(value, ["status", "userCode", "verificationUrl"]) ||
-    !isOneOf(value.status, ["unknown", "logged_out", "login_pending", "authenticated"]) ||
-    typeof value.userCode !== "string" ||
-    !/^[A-Z0-9-]{4,32}$/.test(value.userCode) ||
-    typeof value.verificationUrl !== "string"
-  ) return null;
-  try {
-    const url = new URL(value.verificationUrl);
-    if (
-      url.protocol !== "https:" ||
-      url.hostname !== "auth.openai.com" ||
-      url.port !== "" ||
-      url.username !== "" ||
-      url.password !== "" ||
-      url.hash !== ""
-    ) return null;
-  } catch {
-    return null;
-  }
-  return value as unknown as DeviceLogin;
 }
 
 function validSession(value: unknown): boolean {
