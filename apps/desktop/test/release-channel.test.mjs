@@ -11,8 +11,7 @@ const repositoryRoot = path.resolve(desktopRoot, "../..");
 const require = createRequire(import.meta.url);
 
 test("every packaged desktop build embeds the public GitHub update provider", () => {
-  delete process.env.FINANCE_OS_UPDATE_URL;
-  const configuration = require("../electron-builder.config.cjs");
+  const configuration = loadConfiguration({ signing: false });
 
   assert.deepEqual(configuration.publish, [{
     provider: "github",
@@ -24,6 +23,16 @@ test("every packaged desktop build embeds the public GitHub update provider", ()
     { target: "dmg", arch: ["arm64"] },
     { target: "zip", arch: ["arm64"] },
   ]);
+});
+
+test("production release packaging enables Apple security controls", () => {
+  const configuration = loadConfiguration({ signing: true });
+
+  assert.equal(configuration.mac.identity, undefined);
+  assert.equal(configuration.mac.hardenedRuntime, true);
+  assert.equal(configuration.mac.notarize, true);
+  assert.equal(configuration.mac.entitlements, "build/entitlements.mac.plist");
+  assert.equal(configuration.mac.entitlementsInherit, "build/entitlements.mac.inherit.plist");
 });
 
 test("desktop release publishes the complete macOS update set without AWS", async () => {
@@ -88,4 +97,12 @@ test("the GitHub channel has no legacy S3 publishing entry point", async () => {
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function loadConfiguration({ signing }) {
+  const configurationPath = require.resolve("../electron-builder.config.cjs");
+  if (signing) process.env.FINANCE_OS_SIGN_BUILD = "1";
+  else delete process.env.FINANCE_OS_SIGN_BUILD;
+  delete require.cache[configurationPath];
+  return require(configurationPath);
 }
