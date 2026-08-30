@@ -19,6 +19,7 @@ export const FINANCE_TURN_OUTPUT_LIMIT_BYTES = 256 * 1024;
 export const FINANCE_SESSION_READ_LIMIT = 60;
 export const FINANCE_SESSION_PROPOSAL_LIMIT = 5;
 export const FINANCE_SESSION_OUTPUT_LIMIT_BYTES = 1024 * 1024;
+export const FINANCE_TURN_CORRECTION_LIMIT = 1;
 export const MAX_FINANCE_CALL_LEDGER_ENTRIES =
   FINANCE_SESSION_READ_LIMIT + FINANCE_SESSION_PROPOSAL_LIMIT;
 
@@ -76,6 +77,7 @@ export class FinanceToolDispatcher {
   #turn: (FinanceToolTurnBinding & { abortController: AbortController }) | undefined;
   #sessionUsage: Usage = emptyUsage();
   #turnUsage: Usage = emptyUsage();
+  #turnCorrections = 0;
   readonly #ledger = new Map<string, LedgerEntry>();
 
   constructor(api: FinanceToolApi, consent: FinanceConsentAuthority) {
@@ -99,6 +101,7 @@ export class FinanceToolDispatcher {
     validateIdentifier(binding.providerTurnId);
     this.#turn = { ...binding, abortController: new AbortController() };
     this.#turnUsage = emptyUsage();
+    this.#turnCorrections = 0;
   }
 
   interruptTurn(): void {
@@ -110,6 +113,7 @@ export class FinanceToolDispatcher {
     this.#turn.abortController.abort();
     this.#turn = undefined;
     this.#turnUsage = emptyUsage();
+    this.#turnCorrections = 0;
   }
 
   closeSession(): void {
@@ -126,6 +130,7 @@ export class FinanceToolDispatcher {
     this.#turn = undefined;
     this.#session = undefined;
     this.#turnUsage = emptyUsage();
+    this.#turnCorrections = 0;
     this.#sessionUsage = emptyUsage();
     this.#ledger.clear();
   }
@@ -158,7 +163,10 @@ export class FinanceToolDispatcher {
       validated = validateFinanceToolCall(params.namespace, params.tool, params.arguments);
     } catch (error) {
       if (error instanceof FinanceToolContractError) {
-        return this.#remember(callId, digest, failed("Der Werkzeugaufruf wurde aus Sicherheitsgründen abgelehnt.", true));
+        const result = error.code === "invalid_arguments"
+          ? this.#correctableFailure("invalid_arguments")
+          : diagnosticFailure(error.code, "Der Werkzeugaufruf wurde aus Sicherheitsgründen abgelehnt.", [], true);
+        return this.#remember(callId, digest, result);
       }
       throw error;
     }
@@ -185,7 +193,12 @@ export class FinanceToolDispatcher {
         result = this.#boundedSuccess(validated.name, data, isProposal);
       }
     } catch (error) {
-      result = mapFailure(error);
+      if (error instanceof FinanceApiClientError && error.code === "invalid_request") {
+        this.#releaseCall(isProposal);
+        result = this.#correctableFailure(apiRejectionCode(error.httpStatus));
+      } else {
+        result = mapFailure(error);
+      }
     } finally {
       this.#activeCall = false;
     }
@@ -200,6 +213,32 @@ export class FinanceToolDispatcher {
     this.#turnUsage[key] += 1;
     this.#sessionUsage[key] += 1;
     return true;
+  }
+
+  #releaseCall(isProposal: boolean): void {
+    const key = isProposal ? "proposals" : "reads";
+    this.#turnUsage[key] = Math.max(0, this.#turnUsage[key] - 1);
+    this.#sessionUsage[key] = Math.max(0, this.#sessionUsage[key] - 1);
+  }
+
+  #correctableFailure(errorCode: string): FinanceToolDispatchResult {
+    if (this.#turnCorrections >= FINANCE_TURN_CORRECTION_LIMIT) {
+      return diagnosticFailure(
+        `${errorCode}_retry_exhausted`,
+        "Die einmalige sichere Korrektur ist fehlgeschlagen.",
+        [],
+        true,
+      );
+    }
+    this.#turnCorrections += 1;
+    return diagnosticFailure(
+      errorCode,
+      "Die Werkzeugargumente sind ungültig.",
+      [
+        "Korrigiere den Aufruf genau einmal: Geldbeträge als Dezimalstring mit zwei Nachkommastellen, Währung als ISO-4217-Code und alle Pflichtfelder angeben.",
+      ],
+      false,
+    );
   }
 
   #boundedSuccess(name: FinanceToolName, data: JsonValue, isProposal: boolean): FinanceToolDispatchResult {
@@ -277,6 +316,10 @@ function mapFailure(error: unknown): FinanceToolDispatchResult {
         return encodeEnvelope({ status: "stale", summary: "Der Finanzstand hat sich geändert. Bitte neu laden.", next_actions: [], artifacts: [] }, false);
       case "rejected":
         return encodeEnvelope({ status: "rejected", summary: "Der Finanzvorschlag wurde sicher abgelehnt.", next_actions: [], artifacts: [] }, false);
+      case "invalid_request":
+        return diagnosticFailure(apiRejectionCode(error.httpStatus), "Die Werkzeugargumente sind ungültig.", [], true);
+      case "unauthorized":
+        return diagnosticFailure("api_unauthorized", "Der Finanzassistent ist nicht sicher autorisiert.", [], true);
       case "unavailable":
       case "invalid_response":
       case "response_too_large":
@@ -291,6 +334,25 @@ function mapFailure(error: unknown): FinanceToolDispatchResult {
 
 function failed(summary: string, abortTurn: boolean): FinanceToolDispatchResult {
   return encodeEnvelope({ status: "rejected", summary, next_actions: [], artifacts: [] }, false, abortTurn);
+}
+
+function diagnosticFailure(
+  errorCode: string,
+  summary: string,
+  nextActions: string[],
+  abortTurn: boolean,
+): FinanceToolDispatchResult {
+  return encodeEnvelope({
+    status: "rejected",
+    error_code: errorCode,
+    summary,
+    next_actions: nextActions,
+    artifacts: [],
+  }, false, abortTurn);
+}
+
+function apiRejectionCode(httpStatus: number | undefined): string {
+  return httpStatus === 400 ? "api_rejected_400" : "api_rejected_422";
 }
 
 function encodeEnvelope(envelope: JsonValue, success: boolean, abortTurn = false): FinanceToolDispatchResult {
