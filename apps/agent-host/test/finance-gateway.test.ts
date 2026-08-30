@@ -13,6 +13,7 @@ class StubService implements FinanceGatewayService {
     auth: "authenticated",
     consent: { status: "granted", version: "2026-08-28.v1" },
     host: "ready",
+    provider: { status: "ready", version: "0.151.0" },
     session: null,
     turn: null,
   };
@@ -20,11 +21,7 @@ class StubService implements FinanceGatewayService {
   snapshot(): FinanceAgentSnapshot { return structuredClone(this.state); }
   async grantConsent(): Promise<void> { this.calls.push({ operation: "grant", values: [] }); }
   async revokeConsent(): Promise<void> { this.calls.push({ operation: "revoke", values: [] }); }
-  async startLogin(): Promise<unknown> {
-    this.calls.push({ operation: "login", values: [] });
-    return { status: "login_pending", userCode: "ABCD-EFGH", verificationUrl: "https://auth.openai.com/device" };
-  }
-  async logout(): Promise<void> { this.calls.push({ operation: "logout", values: [] }); }
+  async refreshProvider(): Promise<void> { this.calls.push({ operation: "refreshProvider", values: [] }); }
   async createSession(sessionId: string): Promise<void> {
     this.calls.push({ operation: "createSession", values: [sessionId] });
   }
@@ -88,6 +85,28 @@ test("finance gateway: validates exact commands before invoking the service", as
   });
   assert.equal(extended.status, 400);
   assert.equal(service.calls.length, 2);
+});
+
+test("finance gateway: refreshes system Codex status without owning global login", async (t) => {
+  const { origin, service } = await fixture(t);
+  const refreshed = await request(origin, "/v1/provider/refresh", {
+    body: "{}",
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  assert.equal(refreshed.status, 200);
+  assert.deepEqual(service.calls, [{ operation: "refreshProvider", values: [] }]);
+
+  assert.equal((await request(origin, "/v1/auth/login", {
+    body: "{}",
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  })).status, 404);
+  assert.equal((await request(origin, "/v1/auth/logout", {
+    body: "{}",
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  })).status, 404);
 });
 
 test("finance gateway: streams authenticated replayable events without cache", async (t) => {
