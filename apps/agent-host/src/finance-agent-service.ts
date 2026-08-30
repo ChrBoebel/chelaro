@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { ServerNotification } from "../generated/codex/ts/ServerNotification.js";
 import type { ServerRequest } from "../generated/codex/ts/ServerRequest.js";
-import { CodexProcess, type CodexProcessOptions } from "./codex-process.js";
+import { CodexProcess } from "./codex-process.js";
 import {
   FINANCE_CONSENT_VERSION,
   FinanceConsentJournal,
@@ -12,8 +12,12 @@ import {
   FinanceAuthController,
   type FinanceAuthProcessPort,
   type FinanceAuthStatus,
-  type FinanceDeviceLogin,
 } from "./finance-auth-controller.js";
+import {
+  inspectCodexProvider,
+  type CodexProviderOptions,
+  type CodexProviderSnapshot,
+} from "./codex-provider.js";
 import {
   FinanceAssistantStreamProjector,
   type FinanceChatStreamEvent,
@@ -24,7 +28,10 @@ import {
   assertSafeFinanceThreadResponse,
 } from "./finance-response-validator.js";
 import { FinanceServerRequestHandler } from "./finance-server-request-handler.js";
-import { buildFinanceThreadStartParams } from "./finance-thread-contract.js";
+import {
+  buildFinanceThreadStartParams,
+  configuredMcpServerNames,
+} from "./finance-thread-contract.js";
 import {
   FINANCE_TOOL_NAMES,
   FINANCE_TOOL_NAMESPACE,
@@ -55,13 +62,14 @@ interface ProcessCallbacks {
 }
 
 export interface FinanceAgentServiceOptions {
-  codexProcess?: Omit<CodexProcessOptions, "onFatalError" | "onNotification" | "onServerRequest">;
+  codexProvider?: CodexProviderOptions;
   consentJournal: FinanceConsentJournal;
   emit: (event: FinanceAgentEvent) => void;
   hostEpoch?: string;
   model?: string;
   processFactory?: (callbacks: ProcessCallbacks) => FinanceCodexProcessPort;
   runtimeDirectory: string;
+  temporaryDirectory?: string;
 }
 
 export interface FinanceAgentSnapshot {
@@ -69,6 +77,7 @@ export interface FinanceAgentSnapshot {
   auth: FinanceChatState["auth"];
   consent: FinanceChatState["consent"];
   host: FinanceChatState["host"];
+  provider: CodexProviderSnapshot;
   session: null | { id: string; status: NonNullable<FinanceChatState["session"]>["status"] };
   turn: null | { id: string; status: NonNullable<FinanceChatState["turn"]>["status"] };
 }
@@ -87,6 +96,7 @@ export class FinanceAgentService {
   #dispatcher: FinanceToolDispatcher | undefined;
   #handler: FinanceServerRequestHandler | undefined;
   #process: FinanceCodexProcessPort | undefined;
+  #provider: CodexProviderSnapshot = { status: "checking", version: null };
   #projector: FinanceAssistantStreamProjector | undefined;
   #state: FinanceChatState = INITIAL_FINANCE_CHAT_STATE;
   #turnStarting = false;
@@ -106,6 +116,7 @@ export class FinanceAgentService {
       auth: this.#state.auth,
       consent: { ...this.#state.consent },
       host: this.#state.host,
+      provider: { ...this.#provider },
       session: this.#state.session
         ? { id: this.#state.session.id, status: this.#state.session.status }
         : null,
@@ -116,29 +127,12 @@ export class FinanceAgentService {
   async start(): Promise<void> {
     if (this.#process) throw new FinanceAgentServiceError("invalid_state");
     this.#loadConsent();
-    const callbacks: ProcessCallbacks = {
-      onFatalError: () => this.#handleFatalProcessError(),
-      onNotification: (notification) => this.#handleNotification(notification),
-      onServerRequest: (request) => this.#handleServerRequest(request),
-    };
-    const process = this.#createProcess(callbacks);
-    this.#process = process;
-    this.#transition({ type: "app_server.status", status: "starting" });
-    try {
-      await process.start();
-      this.#transition({ type: "app_server.status", status: "ready" });
-      this.#auth = new FinanceAuthController({
-        consent: this.#consent,
-        emit: (status) => this.#syncAuth(status),
-        process,
-      });
-      if (this.#state.consent.status === "granted") await this.#auth.refresh().catch(() => undefined);
-      this.#transition({ type: "host.status", status: "ready" });
-    } catch {
-      await process.stop().catch(() => undefined);
-      this.#process = undefined;
-      if (this.#state.host === "starting") this.#transition({ type: "host.status", status: "degraded" });
-      throw new FinanceAgentServiceError("agent_unavailable");
+    this.#transition({ type: "host.status", status: "ready" });
+    if (this.#options.processFactory) {
+      this.#setProvider({ status: "ready", version: "test" });
+      await this.#startProcessAfterGrant();
+    } else if (this.#state.consent.status === "granted") {
+      await this.refreshProvider();
     }
   }
 
@@ -157,20 +151,23 @@ export class FinanceAgentService {
   async grantConsent(): Promise<FinanceConsentSnapshot> {
     const snapshot = this.#consent.grant();
     this.#transition({ type: "consent.granted", version: FINANCE_CONSENT_VERSION });
-    if (!this.#process) await this.#startProcessAfterGrant();
-    await this.#requiredAuth().refresh();
+    await this.refreshProvider();
     return snapshot;
   }
 
-  async startLogin(): Promise<FinanceDeviceLogin> {
-    return this.#requiredAuth().startLogin();
-  }
-
-  async logout(): Promise<void> {
+  async refreshProvider(): Promise<void> {
     if (this.#state.session && this.#state.session.status !== "closed") {
       throw new FinanceAgentServiceError("session_busy");
     }
-    await this.#requiredAuth().logout();
+    this.#consent.assertGranted(FINANCE_CONSENT_VERSION);
+    if (this.#process && this.#auth) {
+      await this.#auth.refresh();
+      return;
+    }
+    await this.#startProcessAfterGrant();
+    await this.#auth?.refresh().catch(() => {
+      this.#syncAuth("logged_out");
+    });
   }
 
   async createSession(sessionId: string): Promise<void> {
@@ -180,9 +177,14 @@ export class FinanceAgentService {
     this.#transition({ type: "session.start", consentVersion: FINANCE_CONSENT_VERSION, sessionId });
     let dispatcherStarted = false;
     try {
-      const response = await this.#requiredProcess().request(
+      const process = this.#requiredProcess();
+      const configuration = await process.request("config/read", {
+        cwd: this.#options.runtimeDirectory,
+        includeLayers: false,
+      });
+      const response = await process.request(
         "thread/start",
-        buildFinanceThreadStartParams(this.#model),
+        buildFinanceThreadStartParams(this.#model, configuredMcpServerNames(configuration)),
       );
       assertSafeFinanceThreadResponse(response, this.#options.runtimeDirectory);
       dispatcher.startSession({
@@ -419,6 +421,7 @@ export class FinanceAgentService {
   }
 
   #handleFatalProcessError(): void {
+    this.#setProvider({ status: "error", version: this.#provider.version });
     this.#projector?.abort();
     this.#projector = undefined;
     this.#dispatcher?.abandonSession();
@@ -459,22 +462,52 @@ export class FinanceAgentService {
       onNotification: (notification) => this.#handleNotification(notification),
       onServerRequest: (request) => this.#handleServerRequest(request),
     };
-    const process = this.#createProcess(callbacks);
+    let process: FinanceCodexProcessPort;
+    if (this.#options.processFactory) {
+      process = this.#options.processFactory(callbacks);
+    } else {
+      const providerOptions = this.#options.codexProvider;
+      const temporaryDirectory = this.#options.temporaryDirectory;
+      if (!providerOptions || !temporaryDirectory) throw new FinanceAgentServiceError("invalid_configuration");
+      this.#setProvider({ status: "checking", version: null });
+      const inspection = inspectCodexProvider(providerOptions);
+      this.#setProvider(inspection.snapshot);
+      if (!inspection.launch) return;
+      process = new CodexProcess({
+        binaryPath: inspection.launch.binaryPath,
+        codexHome: inspection.launch.codexHome,
+        home: inspection.launch.home,
+        onFatalError: callbacks.onFatalError,
+        onNotification: callbacks.onNotification,
+        onServerRequest: callbacks.onServerRequest,
+        path: inspection.launch.path,
+        runtimeDirectory: this.#options.runtimeDirectory,
+        temporaryDirectory,
+      });
+    }
     this.#process = process;
     this.#transition({ type: "app_server.status", status: "starting" });
-    await process.start();
-    this.#transition({ type: "app_server.status", status: "ready" });
-    this.#auth = new FinanceAuthController({
-      consent: this.#consent,
-      emit: (status) => this.#syncAuth(status),
-      process,
-    });
+    try {
+      await process.start();
+      this.#transition({ type: "app_server.status", status: "ready" });
+      this.#auth = new FinanceAuthController({
+        consent: this.#consent,
+        emit: (status) => this.#syncAuth(status),
+        process,
+      });
+    } catch {
+      await process.stop().catch(() => undefined);
+      this.#process = undefined;
+      this.#setProvider({ status: "error", version: this.#provider.version });
+      this.#transition({ type: "app_server.status", status: "stopping" });
+      this.#transition({ type: "app_server.status", status: "stopped" });
+    }
   }
 
-  #createProcess(callbacks: ProcessCallbacks): FinanceCodexProcessPort {
-    if (this.#options.processFactory) return this.#options.processFactory(callbacks);
-    if (!this.#options.codexProcess) throw new FinanceAgentServiceError("invalid_configuration");
-    return new CodexProcess({ ...this.#options.codexProcess, ...callbacks });
+  #setProvider(snapshot: CodexProviderSnapshot): void {
+    if (this.#provider.status === snapshot.status && this.#provider.version === snapshot.version) return;
+    this.#provider = { ...snapshot };
+    this.#emit({ snapshot: this.snapshot(), type: "state.changed" });
   }
 
   #transition(event: FinanceChatEvent): void {

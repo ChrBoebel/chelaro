@@ -31,12 +31,15 @@ test("host main: receives finance credentials only after startup over inherited 
   const ready = await nextMessage(child);
   assert.deepEqual(ready, { protocolVersion: 1, type: "finance.ready_for_configuration" });
   child.send({
+    codexBinaryPath: "codex",
+    codexHome: join(dataRoot, "user-home", ".codex"),
     financeApiToken,
     financeApiUrl: "http://127.0.0.1:65534/",
     gatewayToken,
     protocolVersion: 1,
     requestId: "configure_1",
     type: "finance.configure",
+    userHome: join(dataRoot, "user-home"),
   });
   const configured = await nextMessage(child) as { gatewayOrigin: string; type: string };
   assert.equal(configured.type, "finance.configured", JSON.stringify(configured));

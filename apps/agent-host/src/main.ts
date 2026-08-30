@@ -6,31 +6,18 @@ import {
   HOST_CONFIGURATION_TIMEOUT_MS,
   HOST_IPC_PROTOCOL_VERSION,
   prepareFinanceHostPaths,
-  resolvePinnedCodexExecutable,
   validateFinanceHostInitialization,
 } from "./host-bootstrap.js";
 
 let apiClient: FinanceApiClient | undefined;
 let gateway: FinanceGateway | undefined;
+let service: FinanceAgentService | undefined;
 let stopping = false;
 
 async function run(): Promise<void> {
   if (typeof process.send !== "function" || !process.connected) throw new Error("Parent IPC is required.");
   const dataRoot = requiredAbsoluteEnvironment("FINANCE_OS_AGENT_DATA_ROOT");
   const paths = prepareFinanceHostPaths(dataRoot);
-  const service = new FinanceAgentService({
-    codexProcess: {
-      binaryPath: resolvePinnedCodexExecutable(),
-      codexHome: paths.codexHome,
-      home: paths.home,
-      runtimeDirectory: paths.runtimeDirectory,
-      temporaryDirectory: paths.temporaryDirectory,
-    },
-    consentJournal: new FinanceConsentJournal({ journalPath: paths.consentJournal }),
-    emit: (event) => gateway?.publish(event),
-    runtimeDirectory: paths.runtimeDirectory,
-  });
-
   const shutdown = async (): Promise<void> => {
     if (stopping) return;
     stopping = true;
@@ -38,14 +25,14 @@ async function run(): Promise<void> {
     gateway = undefined;
     apiClient?.clearCredential();
     apiClient = undefined;
-    await service.stop().catch(() => undefined);
+    await service?.stop().catch(() => undefined);
+    service = undefined;
   };
 
   process.once("disconnect", () => { void shutdown().finally(() => process.exit(0)); });
   process.once("SIGTERM", () => { void shutdown().finally(() => process.exit(0)); });
   process.once("SIGINT", () => { void shutdown().finally(() => process.exit(0)); });
 
-  await service.start();
   send({ protocolVersion: HOST_IPC_PROTOCOL_VERSION, type: "finance.ready_for_configuration" });
   const timer = setTimeout(() => { void shutdown().finally(() => process.exit(1)); }, HOST_CONFIGURATION_TIMEOUT_MS);
   timer.unref();
@@ -58,14 +45,28 @@ async function run(): Promise<void> {
       const client = new FinanceApiClient({ baseUrl: initialization.financeApiUrl });
       client.setCredential(initialization.financeApiToken);
       stage = "service";
-      service.configureFinanceApi(client);
+      const nextService = new FinanceAgentService({
+        codexProvider: {
+          binaryPath: initialization.codexBinaryPath,
+          codexHome: initialization.codexHome,
+          home: initialization.userHome,
+          ...(process.env.PATH === undefined ? {} : { path: process.env.PATH }),
+        },
+        consentJournal: new FinanceConsentJournal({ journalPath: paths.consentJournal }),
+        emit: (event) => gateway?.publish(event),
+        runtimeDirectory: paths.runtimeDirectory,
+        temporaryDirectory: paths.temporaryDirectory,
+      });
+      await nextService.start();
+      nextService.configureFinanceApi(client);
       stage = "gateway";
       const nextGateway = new FinanceGateway({
         capabilityToken: initialization.gatewayToken,
-        service,
+        service: nextService,
       });
       const address = await nextGateway.start();
       apiClient = client;
+      service = nextService;
       gateway = nextGateway;
       await sendAsync({
         gatewayOrigin: address.origin,

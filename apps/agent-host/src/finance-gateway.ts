@@ -13,10 +13,9 @@ export interface FinanceGatewayService {
   createSession(sessionId: string): Promise<void>;
   grantConsent(): Promise<unknown>;
   interruptTurn(): Promise<void>;
-  logout(): Promise<void>;
+  refreshProvider(): Promise<void>;
   revokeConsent(): Promise<unknown>;
   snapshot(): FinanceAgentSnapshot;
-  startLogin(): Promise<unknown>;
   startTurn(sessionId: string, turnId: string, prompt: string): Promise<void>;
 }
 
@@ -122,13 +121,9 @@ export class FinanceGateway {
       await this.#service.revokeConsent();
       return respondJson(response, 200, { snapshot: this.#service.snapshot() });
     }
-    if (request.method === "POST" && url.pathname === "/v1/auth/login") {
+    if (request.method === "POST" && url.pathname === "/v1/provider/refresh") {
       assertEmptyBody(await readJson(request));
-      return respondJson(response, 200, { login: await this.#service.startLogin() });
-    }
-    if (request.method === "POST" && url.pathname === "/v1/auth/logout") {
-      assertEmptyBody(await readJson(request));
-      await this.#service.logout();
+      await this.#service.refreshProvider();
       return respondJson(response, 200, { snapshot: this.#service.snapshot() });
     }
     if (request.method === "POST" && url.pathname === "/v1/sessions") {

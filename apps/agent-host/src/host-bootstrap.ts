@@ -1,23 +1,23 @@
-import { constants, closeSync, fstatSync, fsyncSync, ftruncateSync, lstatSync, mkdirSync, openSync, writeSync } from "node:fs";
-import { createRequire } from "node:module";
+import { lstatSync, mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
 export const HOST_IPC_PROTOCOL_VERSION = 1;
 export const HOST_CONFIGURATION_TIMEOUT_MS = 15_000;
 
 export interface FinanceHostInitialization {
+  codexBinaryPath: string;
+  codexHome: string;
   financeApiToken: string;
   financeApiUrl: string;
   gatewayToken: string;
   protocolVersion: typeof HOST_IPC_PROTOCOL_VERSION;
   requestId: string;
   type: "finance.configure";
+  userHome: string;
 }
 
 export interface FinanceHostPaths {
-  codexHome: string;
   consentJournal: string;
-  home: string;
   runtimeDirectory: string;
   temporaryDirectory: string;
 }
@@ -25,12 +25,15 @@ export interface FinanceHostPaths {
 export function validateFinanceHostInitialization(value: unknown): FinanceHostInitialization {
   if (!isRecord(value)) throw new HostBootstrapError("invalid_message");
   const expected = [
+    "codexBinaryPath",
+    "codexHome",
     "financeApiToken",
     "financeApiUrl",
     "gatewayToken",
     "protocolVersion",
     "requestId",
     "type",
+    "userHome",
   ].sort();
   if (JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(expected)) {
     throw new HostBootstrapError("invalid_message");
@@ -50,7 +53,18 @@ export function validateFinanceHostInitialization(value: unknown): FinanceHostIn
   ) {
     throw new HostBootstrapError("invalid_message");
   }
-  if (Buffer.byteLength(JSON.stringify(value), "utf8") > 2048) {
+  for (const path of [value.codexHome, value.userHome]) {
+    if (typeof path !== "string" || !isAbsolute(path) || path.length > 4_096 || /[\r\n\0]/.test(path)) {
+      throw new HostBootstrapError("invalid_message");
+    }
+  }
+  if (
+    typeof value.codexBinaryPath !== "string" ||
+    value.codexBinaryPath.length === 0 ||
+    value.codexBinaryPath.length > 4_096 ||
+    /[\r\n\0]/.test(value.codexBinaryPath)
+  ) throw new HostBootstrapError("invalid_message");
+  if (Buffer.byteLength(JSON.stringify(value), "utf8") > 12 * 1024) {
     throw new HostBootstrapError("invalid_message");
   }
   return value as unknown as FinanceHostInitialization;
@@ -61,42 +75,16 @@ export function prepareFinanceHostPaths(dataRoot: string): FinanceHostPaths {
   const canonicalRoot = resolve(dataRoot);
   ensureOwnerDirectory(canonicalRoot);
   const paths = {
-    codexHome: join(canonicalRoot, "codex-home"),
     consentJournal: join(canonicalRoot, "consent", "journal.ndjson"),
-    home: join(canonicalRoot, "empty-home"),
     runtimeDirectory: join(canonicalRoot, "runtime"),
     temporaryDirectory: join(canonicalRoot, "tmp"),
   };
   for (const directory of [
-    paths.codexHome,
     dirname(paths.consentJournal),
-    paths.home,
     paths.runtimeDirectory,
     paths.temporaryDirectory,
   ]) ensureOwnerDirectory(directory);
-  writeSecureFile(
-    join(paths.codexHome, "config.toml"),
-    Buffer.from("[analytics]\nenabled = false\n", "utf8"),
-  );
   return paths;
-}
-
-export function resolvePinnedCodexExecutable(): string {
-  if (process.platform !== "darwin" || process.arch !== "arm64") {
-    throw new HostBootstrapError("unsupported_platform");
-  }
-  const localRequire = createRequire(import.meta.url);
-  let packagePath: string;
-  try {
-    const codexPackage = localRequire.resolve("@openai/codex/package.json");
-    packagePath = createRequire(codexPackage).resolve("@openai/codex-darwin-arm64/package.json");
-  } catch {
-    throw new HostBootstrapError("missing_codex_runtime");
-  }
-  const binary = join(dirname(packagePath), "vendor", "aarch64-apple-darwin", "bin", "codex");
-  const stats = lstatSync(binary);
-  if (!stats.isFile() || stats.isSymbolicLink()) throw new HostBootstrapError("missing_codex_runtime");
-  return binary;
 }
 
 export class HostBootstrapError extends Error {
@@ -104,8 +92,7 @@ export class HostBootstrapError extends Error {
     | "invalid_configuration"
     | "invalid_message"
     | "invalid_permissions"
-    | "missing_codex_runtime"
-    | "unsupported_platform";
+    ;
 
   constructor(code: HostBootstrapError["code"]) {
     super("Finance host bootstrap failed.");
@@ -125,28 +112,6 @@ function ensureOwnerDirectory(path: string): void {
   } catch (error) {
     if (error instanceof HostBootstrapError) throw error;
     throw new HostBootstrapError("invalid_configuration");
-  }
-}
-
-function writeSecureFile(path: string, bytes: Buffer): void {
-  let descriptor: number | undefined;
-  try {
-    descriptor = openSync(
-      path,
-      constants.O_WRONLY | constants.O_CREAT | (constants.O_NOFOLLOW ?? 0),
-      0o600,
-    );
-    const stats = fstatSync(descriptor);
-    const uid = typeof process.getuid === "function" ? process.getuid() : stats.uid;
-    if (!stats.isFile() || stats.nlink !== 1 || stats.uid !== uid || (stats.mode & 0o077) !== 0) {
-      throw new HostBootstrapError("invalid_permissions");
-    }
-    ftruncateSync(descriptor, 0);
-    const written = writeSync(descriptor, bytes, 0, bytes.length, 0);
-    if (written !== bytes.length) throw new HostBootstrapError("invalid_configuration");
-    fsyncSync(descriptor);
-  } finally {
-    if (descriptor !== undefined) closeSync(descriptor);
   }
 }
 
