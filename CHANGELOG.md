@@ -11,15 +11,35 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.2.0] - Unpublished release candidate
+
+Version `0.2.0` is the first update-capable bootstrap candidate. No signed binary or GitHub Release
+exists until the Apple signing and notarization gate succeeds.
+
 ### Added
 
 - Source-run Agent Host foundation with a pinned, verified Codex App Server, an allowlisted child
   environment, restrictive tool permissions, and fail-closed platform checks.
 - Host-owned synthetic agent workspaces with immutable baselines and reviewable diffs.
+- Reuse of the installed system Codex CLI and its existing ChatGPT login without a second Chelaro
+  credential store.
+- A finance-only Codex thread with exactly eight bounded tools and proposal-only mutations.
+- Privacy-safe diagnostic codes and one controlled correction for malformed finance tool calls.
+- A permanent public GitHub Releases provider in packaged macOS builds.
+- A tag-driven workflow that signs, notarizes, verifies, checksums, and publishes the complete macOS
+  update set only after the full quality gate.
+
+### Fixed
+
+- Packaged Next.js startup now includes the complete standalone dependency closure.
+- Correctable HTTP 400/422 proposal failures no longer consume the one-proposal-per-turn budget.
 
 ### Security
 
 - Updated the Agent Host schema validator to AJV 8.18.0, which resolves CVE-2025-69873.
+- Public update clients require no GitHub or cloud credential.
+- Release publication remains blocked until Developer ID signature and Apple notarization checks
+  succeed.
 
 ## [0.1.0] - Unpublished release candidate
 
