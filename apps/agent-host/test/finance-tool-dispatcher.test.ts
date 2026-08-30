@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import type { JsonValue } from "../generated/codex/ts/serde_json/JsonValue.js";
 import type { DynamicToolCallParams } from "../generated/codex/ts/v2/DynamicToolCallParams.js";
+import { FinanceApiClientError } from "../src/finance-api-client.js";
 import type { FinanceToolName } from "../src/finance-tool-contract.js";
 import {
   FINANCE_SESSION_READ_LIMIT,
@@ -65,7 +66,7 @@ test("derives stable proposal correlation and returns an exactly-once retry", as
   assert.equal(JSON.parse(textOf(first)).artifacts[0].type, "finance_proposal");
 });
 
-test("rejects mismatched, unknown, malformed, and contradictory calls without touching the API", async () => {
+test("rejects mismatched, unknown, malformed identifiers, and contradictory calls without touching the API", async () => {
   const api = new StubApi({ data: [] });
   const dispatcher = activeDispatcher(api, new StubConsent());
 
@@ -78,17 +79,112 @@ test("rejects mismatched, unknown, malformed, and contradictory calls without to
     namespace: "coding",
     tool: "shell",
   });
-  const malformed = await dispatcher.dispatch(call("malformed", "finance_list_transactions", { limit: 1.5 }));
   const malformedIdentifier = await dispatcher.dispatch(call("not a valid call id", "finance_list_transactions", {}));
   const accepted = call("same_call", "finance_list_transactions", { limit: 1 });
   await dispatcher.dispatch(accepted);
   const contradictory = await dispatcher.dispatch({ ...accepted, arguments: { limit: 2 } });
 
-  for (const result of [wrongThread, unknown, malformed, malformedIdentifier, contradictory]) {
+  for (const result of [wrongThread, unknown, malformedIdentifier, contradictory]) {
     assert.equal(result.abortTurn, true);
     assert.equal(result.response.success, false);
   }
   assert.equal(api.calls.length, 1);
+});
+
+test("allows exactly one privacy-safe correction for invalid tool arguments", async () => {
+  const api = new StubApi({ data: { id: "223e4567-e89b-42d3-a456-426614174000", status: "pending" } });
+  const dispatcher = activeDispatcher(api, new StubConsent());
+  const privateMarker = "PRIVATE_SYNTHETIC_MARKER";
+
+  const first = await dispatcher.dispatch(call("malformed_1", "finance_propose_receivable_create", {
+    debtor_name: privateMarker,
+    original_amount: 500,
+    currency: "EUR",
+    description: "Synthetischer Zweck",
+    rationale: "Synthetischer Vorschlag",
+  }));
+
+  assert.equal(first.abortTurn, false);
+  assert.equal(first.response.success, false);
+  assert.deepEqual(JSON.parse(textOf(first)), {
+    status: "rejected",
+    error_code: "invalid_arguments",
+    summary: "Die Werkzeugargumente sind ungültig.",
+    next_actions: [
+      "Korrigiere den Aufruf genau einmal: Geldbeträge als Dezimalstring mit zwei Nachkommastellen, Währung als ISO-4217-Code und alle Pflichtfelder angeben.",
+    ],
+    artifacts: [],
+  });
+  assert.doesNotMatch(textOf(first), new RegExp(privateMarker));
+  assert.equal(api.calls.length, 0);
+
+  const second = await dispatcher.dispatch(call("malformed_2", "finance_propose_receivable_create", {
+    debtor_name: privateMarker,
+    original_amount: 500,
+    currency: "EUR",
+    description: "Synthetischer Zweck",
+    rationale: "Synthetischer Vorschlag",
+  }));
+
+  assert.equal(second.abortTurn, true);
+  assert.equal(second.response.success, false);
+  assert.equal(JSON.parse(textOf(second)).error_code, "invalid_arguments_retry_exhausted");
+  assert.doesNotMatch(textOf(second), new RegExp(privateMarker));
+  assert.equal(api.calls.length, 0);
+});
+
+test("accepts a corrected proposal after invalid arguments without consuming its budget", async () => {
+  const api = new StubApi({ data: { id: "223e4567-e89b-42d3-a456-426614174000", status: "pending" } });
+  const dispatcher = activeDispatcher(api, new StubConsent());
+
+  const malformed = await dispatcher.dispatch(call("malformed", "finance_propose_receivable_create", {
+    debtor_name: "Synthetische Person",
+    original_amount: 500,
+    currency: "EUR",
+    description: "Synthetischer Zweck",
+    rationale: "Synthetischer Vorschlag",
+  }));
+  const corrected = await dispatcher.dispatch(call("corrected", "finance_propose_receivable_create", {
+    debtor_name: "Synthetische Person",
+    original_amount: "500.00",
+    currency: "EUR",
+    description: "Synthetischer Zweck",
+    rationale: "Synthetischer Vorschlag",
+  }));
+
+  assert.equal(malformed.abortTurn, false);
+  assert.equal(corrected.abortTurn, false);
+  assert.equal(corrected.response.success, true);
+  assert.equal(api.calls.length, 1);
+});
+
+test("releases the proposal budget for one correctable API rejection", async () => {
+  let attempts = 0;
+  const api: FinanceToolApi = {
+    call: async () => {
+      attempts += 1;
+      if (attempts === 1) throw new FinanceApiClientError("invalid_request", 422);
+      return { id: "223e4567-e89b-42d3-a456-426614174000", status: "pending" };
+    },
+  };
+  const dispatcher = activeDispatcher(api, new StubConsent());
+  const argumentsValue = {
+    debtor_name: "Synthetische Person",
+    original_amount: "500.00",
+    currency: "EUR",
+    description: "Synthetischer Zweck",
+    rationale: "Synthetischer Vorschlag",
+  };
+
+  const rejected = await dispatcher.dispatch(call("api_rejected", "finance_propose_receivable_create", argumentsValue));
+  const corrected = await dispatcher.dispatch(call("api_corrected", "finance_propose_receivable_create", argumentsValue));
+
+  assert.equal(rejected.abortTurn, false);
+  assert.equal(rejected.response.success, false);
+  assert.equal(JSON.parse(textOf(rejected)).error_code, "api_rejected_422");
+  assert.equal(corrected.abortTurn, false);
+  assert.equal(corrected.response.success, true);
+  assert.equal(attempts, 2);
 });
 
 test("checks consent both before and after access and withholds data after revocation", async () => {

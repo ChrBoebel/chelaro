@@ -78,7 +78,7 @@ export class FinanceApiClient {
     }
     if (!response.ok) {
       await response.body?.cancel().catch(() => undefined);
-      throw new FinanceApiClientError(response.status === 409 ? "stale" : "rejected");
+      throw classifyHttpFailure(response.status);
     }
     if (response.headers.get("content-type")?.split(";", 1)[0]?.trim() !== "application/json") {
       await response.body?.cancel().catch(() => undefined);
@@ -102,16 +102,28 @@ export class FinanceApiClientError extends Error {
     | "invalid_configuration"
     | "invalid_state"
     | "unavailable"
+    | "invalid_request"
+    | "unauthorized"
     | "rejected"
     | "stale"
     | "invalid_response"
     | "response_too_large";
+  readonly httpStatus: number | undefined;
 
-  constructor(code: FinanceApiClientError["code"]) {
+  constructor(code: FinanceApiClientError["code"], httpStatus?: number) {
     super("Finance API request failed.");
     this.name = "FinanceApiClientError";
     this.code = code;
+    this.httpStatus = httpStatus;
   }
+}
+
+function classifyHttpFailure(status: number): FinanceApiClientError {
+  if (status === 400 || status === 422) return new FinanceApiClientError("invalid_request", status);
+  if (status === 401 || status === 403) return new FinanceApiClientError("unauthorized", status);
+  if (status === 409) return new FinanceApiClientError("stale", status);
+  if (status >= 500) return new FinanceApiClientError("unavailable", status);
+  return new FinanceApiClientError("rejected", status);
 }
 
 function requestFor(
