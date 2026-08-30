@@ -10,13 +10,13 @@ importers:
 
   apps/agent-host:
     dependencies:
-      '@openai/codex':
-        specifier: 0.151.0
-        version: 0.151.0
       ajv:
         specifier: 8.18.0
         version: 8.18.0
     devDependencies:
+      '@openai/codex':
+        specifier: 0.151.0
+        version: 0.151.0
       '@types/node':
         specifier: ^20
         version: 20.19.43
