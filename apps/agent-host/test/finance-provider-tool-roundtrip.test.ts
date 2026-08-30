@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 
+import { FinanceApiClient } from "../src/finance-api-client.js";
 import { FinanceServerRequestHandler } from "../src/finance-server-request-handler.js";
 import { buildFinanceInitializeParams, buildFinanceThreadStartParams } from "../src/finance-thread-contract.js";
 import { FinanceToolDispatcher, type FinanceToolApi } from "../src/finance-tool-dispatcher.js";
@@ -141,10 +142,12 @@ test("provider edge: real App Server corrects invalid proposal arguments exactly
     },
     stdio: ["pipe", "pipe", "pipe"],
   });
+  const externalApi = financeE2eApiFromEnvironment();
   const apiCalls: Array<{ argumentsValue: Record<string, unknown>; name: string }> = [];
   const api: FinanceToolApi = {
-    call: async (name, argumentsValue) => {
+    call: async (name, argumentsValue, options) => {
       apiCalls.push({ name, argumentsValue });
+      if (externalApi) return externalApi.client.call(name, argumentsValue, options);
       return { id: "223e4567-e89b-42d3-a456-426614174000", status: "pending" };
     },
   };
@@ -203,6 +206,7 @@ test("provider edge: real App Server corrects invalid proposal arguments exactly
       },
     }]);
     assert.equal(assistantText, "Der prüfpflichtige Vorschlag wurde erstellt.");
+    if (externalApi) await assertIsolatedProposalState(externalApi);
   } finally {
     rpc.close();
     child.kill("SIGTERM");
@@ -213,6 +217,46 @@ test("provider edge: real App Server corrects invalid proposal arguments exactly
     rmSync(temporaryRoot, { force: true, recursive: true });
   }
 });
+
+interface ExternalFinanceE2eApi {
+  baseUrl: string;
+  client: FinanceApiClient;
+  ownerToken: string;
+}
+
+function financeE2eApiFromEnvironment(): ExternalFinanceE2eApi | undefined {
+  const baseUrl = process.env.FINANCE_E2E_API_BASE_URL;
+  const assistantToken = process.env.FINANCE_E2E_ASSISTANT_TOKEN;
+  const ownerToken = process.env.FINANCE_E2E_OWNER_TOKEN;
+  if (!baseUrl && !assistantToken && !ownerToken) return undefined;
+  if (!baseUrl || !assistantToken || !ownerToken) {
+    throw new Error("The isolated finance E2E API configuration is incomplete.");
+  }
+  const client = new FinanceApiClient({ baseUrl });
+  client.setCredential(assistantToken);
+  return { baseUrl, client, ownerToken };
+}
+
+async function assertIsolatedProposalState(externalApi: ExternalFinanceE2eApi): Promise<void> {
+  const headers = { Authorization: `Bearer ${externalApi.ownerToken}` };
+  const proposalsResponse = await fetch(
+    new URL("/api/v1/finance/change-proposals?pending_only=true", externalApi.baseUrl),
+    { headers },
+  );
+  assert.equal(proposalsResponse.status, 200);
+  const proposals = await proposalsResponse.json() as { data: Array<{ action: string; status: string }> };
+  assert.deepEqual(proposals.data.map(({ action, status }) => ({ action, status })), [{
+    action: "receivable_create",
+    status: "pending",
+  }]);
+
+  const receivablesResponse = await fetch(
+    new URL("/api/v1/finance/receivables", externalApi.baseUrl),
+    { headers },
+  );
+  assert.equal(receivablesResponse.status, 200);
+  assert.deepEqual(await receivablesResponse.json(), { data: [] });
+}
 
 function toolCallStream(): string {
   const item = {
