@@ -7,9 +7,10 @@ cd "$repository_root"
 requested_tag="${1:-}"
 root_version="$(node -p "require('./package.json').version")"
 desktop_version="$(node -p "require('./apps/desktop/package.json').version")"
+web_version="$(node -p "require('./apps/web/package.json').version")"
 
-if [[ "$root_version" != "$desktop_version" ]]; then
-  echo "Root version $root_version does not match desktop version $desktop_version." >&2
+if [[ "$root_version" != "$desktop_version" || "$root_version" != "$web_version" ]]; then
+  echo "Product versions must match (root=$root_version desktop=$desktop_version web=$web_version)." >&2
   exit 1
 fi
 
@@ -42,8 +43,11 @@ if [[ -n "$requested_tag" ]] && ! grep -Eq "^## \[$desktop_version\] - [0-9]{4}-
   exit 1
 fi
 
-if [[ -n "${FINANCE_OS_UPDATE_URL:-}" && "$FINANCE_OS_UPDATE_URL" != https://* ]]; then
-  echo "FINANCE_OS_UPDATE_URL must use HTTPS." >&2
+update_provider="$(node -p "require('./apps/desktop/electron-builder.config.cjs').publish?.[0]?.provider ?? ''")"
+update_owner="$(node -p "require('./apps/desktop/electron-builder.config.cjs').publish?.[0]?.owner ?? ''")"
+update_repository="$(node -p "require('./apps/desktop/electron-builder.config.cjs').publish?.[0]?.repo ?? ''")"
+if [[ "$update_provider" != "github" || "$update_owner" != "ChrBoebel" || "$update_repository" != "chelaro" ]]; then
+  echo "Desktop release must target the reviewed public GitHub update channel." >&2
   exit 1
 fi
 
