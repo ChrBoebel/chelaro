@@ -12,8 +12,16 @@ cleanup() {
 trap cleanup EXIT
 
 pnpm --dir "$repository_root" build:web
+pnpm --dir "$repository_root" smoke:web:standalone
 pnpm --dir "$repository_root" build:agent-host
 pnpm --dir "$repository_root" --filter @finance-os/agent-host --prod --legacy deploy "$staging_root/agent-host"
+agent_workspace_link="$staging_root/agent-host/node_modules/.pnpm/node_modules/@finance-os/agent-host"
+if [[ -L "$agent_workspace_link" ]]; then
+  unlink "$agent_workspace_link"
+elif [[ -e "$agent_workspace_link" ]]; then
+  echo "Refusing to remove a non-link agent workspace entry." >&2
+  exit 1
+fi
 uv run --project "$repository_root/apps/api" pyinstaller \
   --noconfirm \
   --clean \
@@ -50,5 +58,10 @@ find "$runtime_root" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
 cp -R "$staging_root/api" "$runtime_root/api"
 cp -R "$staging_root/web" "$runtime_root/web"
 cp -R "$staging_root/agent-host" "$runtime_root/agent-host"
+
+if [[ -n "$(find -L "$runtime_root" -type l -print -quit)" ]]; then
+  echo "Embedded runtime contains a broken symbolic link." >&2
+  exit 1
+fi
 
 echo "Prepared embedded Chelaro runtime in $runtime_root"

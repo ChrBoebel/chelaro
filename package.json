@@ -33,6 +33,7 @@
     "prepare:desktop-runtime": "bash scripts/prepare-desktop-runtime.sh",
     "publish:desktop-update": "bash scripts/publish-desktop-update.sh",
     "release:check": "bash scripts/check-release-readiness.sh",
+    "smoke:web:standalone": "node scripts/smoke-standalone-web.mjs",
     "quality": "pnpm check:safety && pnpm quality:api && pnpm quality:web && pnpm quality:desktop && pnpm quality:agent",
     "quality:agent": "pnpm typecheck:agent-storage && pnpm test:agent-storage && pnpm typecheck:agent-host && pnpm check:codex-schema",
     "quality:agent:macos": "pnpm quality:agent && pnpm check:agent-tools && pnpm test:agent-host",
