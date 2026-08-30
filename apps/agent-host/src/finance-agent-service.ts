@@ -23,7 +23,7 @@ import {
   type FinanceChatStreamEvent,
 } from "./finance-chat-stream.js";
 import {
-  assertEmptyCodexResponse,
+  assertFinanceThreadUnsubscribeResponse,
   assertFinanceTurnStartResponse,
   assertSafeFinanceThreadResponse,
 } from "./finance-response-validator.js";
@@ -211,8 +211,8 @@ export class FinanceAgentService {
     }
     if (isActiveTurn(this.#state.turn)) throw new FinanceAgentServiceError("turn_busy");
     if (session.providerThreadId && this.#process) {
-      const response = await this.#process.request("thread/close", { threadId: session.providerThreadId });
-      assertEmptyCodexResponse(response);
+      const response = await this.#process.request("thread/unsubscribe", { threadId: session.providerThreadId });
+      assertFinanceThreadUnsubscribeResponse(response);
     }
     this.#dispatcher?.closeSession();
     this.#transition({ type: "session.close", sessionId });

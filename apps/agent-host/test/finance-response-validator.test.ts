@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   assertFinanceAccountResponse,
+  assertFinanceThreadUnsubscribeResponse,
   assertFinanceTurnStartResponse,
   assertSafeFinanceThreadResponse,
 } from "../src/finance-response-validator.js";
@@ -116,4 +117,11 @@ test("finance response validator: accepts only a fresh in-progress empty turn", 
   assert.throws(() => assertFinanceTurnStartResponse({ ...safe, turn: { ...safe.turn, status: "completed" } }));
   assert.throws(() => assertFinanceTurnStartResponse({ ...safe, turn: { ...safe.turn, items: [{ type: "plan" }] } }));
   assert.throws(() => assertFinanceTurnStartResponse({ ...safe, extra: true }));
+});
+
+test("finance response validator: requires a completed thread unsubscribe", () => {
+  assert.doesNotThrow(() => assertFinanceThreadUnsubscribeResponse({ status: "unsubscribed" }));
+  assert.throws(() => assertFinanceThreadUnsubscribeResponse({ status: "notLoaded" }));
+  assert.throws(() => assertFinanceThreadUnsubscribeResponse({ status: "unsubscribed", extra: true }));
+  assert.throws(() => assertFinanceThreadUnsubscribeResponse({}));
 });

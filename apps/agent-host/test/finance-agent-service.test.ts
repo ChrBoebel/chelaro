@@ -51,8 +51,9 @@ class StubProcess {
         if (this.earlyTurn) this.#emitCompletedTurn();
         return { turn: turn("provider_turn_1", "inProgress", []) };
       case "turn/interrupt":
-      case "thread/close":
         return {};
+      case "thread/unsubscribe":
+        return { status: "unsubscribed" };
       default:
         throw new Error(`Unexpected synthetic method: ${method}`);
     }
@@ -178,6 +179,8 @@ test("finance agent service: runs consent-bound chat and tool callbacks without 
   assert.equal(state.service.snapshot().turn?.status, "completed");
   assert.equal(state.events.some((event) => event.type === "assistant.message.completed"), true);
   assert.equal(JSON.stringify(state.service.snapshot()).includes("provider_"), false);
+  await state.service.closeSession("session_1");
+  assert.equal(state.process().calls.at(-1)?.method, "thread/unsubscribe");
 });
 
 test("finance agent service: replays bounded early notifications only after turn binding", async (t) => {

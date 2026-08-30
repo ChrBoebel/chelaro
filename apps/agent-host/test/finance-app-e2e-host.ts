@@ -55,8 +55,9 @@ class SyntheticFinanceProcess {
         return { turn: turn(providerTurnId, "inProgress", []) };
       }
       case "turn/interrupt":
-      case "thread/close":
         return {};
+      case "thread/unsubscribe":
+        return { status: "unsubscribed" };
       default:
         throw new Error(`Unexpected E2E process request: ${method}`);
     }

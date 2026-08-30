@@ -2,6 +2,7 @@ import { realpathSync } from "node:fs";
 
 import type { GetAccountResponse } from "../generated/codex/ts/v2/GetAccountResponse.js";
 import type { ThreadStartResponse } from "../generated/codex/ts/v2/ThreadStartResponse.js";
+import type { ThreadUnsubscribeResponse } from "../generated/codex/ts/v2/ThreadUnsubscribeResponse.js";
 import type { TurnStartResponse } from "../generated/codex/ts/v2/TurnStartResponse.js";
 import { SUPPORTED_CODEX_VERSION } from "./codex-provider.js";
 import {
@@ -88,10 +89,14 @@ export function assertFinanceTurnStartResponse(value: unknown): asserts value is
   }
 }
 
-export function assertEmptyCodexResponse(value: unknown): asserts value is Record<string, never> {
-  if (!isRecord(value) || Object.keys(value).length !== 0) {
-    throw unsafe("Codex returned an unexpected response.");
-  }
+export function assertFinanceThreadUnsubscribeResponse(
+  value: unknown,
+): asserts value is ThreadUnsubscribeResponse & { status: "unsubscribed" } {
+  if (
+    !isRecord(value) ||
+    JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(["status"]) ||
+    value.status !== "unsubscribed"
+  ) throw unsafe("Codex did not unsubscribe the finance thread.");
 }
 
 function validProviderId(value: string): boolean {
