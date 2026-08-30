@@ -6,7 +6,6 @@ import test from "node:test";
 
 import {
   assertFinanceAccountResponse,
-  assertFinanceLoginResponse,
   assertFinanceTurnStartResponse,
   assertSafeFinanceThreadResponse,
 } from "../src/finance-response-validator.js";
@@ -28,7 +27,7 @@ function safeThread(runtimeDirectory: string): Record<string, unknown> {
     thread: {
       agentNickname: null,
       agentRole: null,
-      cliVersion: "0.149.1",
+      cliVersion: "0.151.0",
       createdAt: 1,
       cwd: runtimeDirectory,
       ephemeral: true,
@@ -91,20 +90,13 @@ test("finance response validator: rejects each security-relevant thread relaxati
   }
 });
 
-test("finance response validator: accepts only ChatGPT device login and ChatGPT accounts", () => {
+test("finance response validator: accepts only shared ChatGPT accounts", () => {
   assert.doesNotThrow(() => assertFinanceAccountResponse({ account: null, requiresOpenaiAuth: true }));
   assert.doesNotThrow(() => assertFinanceAccountResponse({
     account: { email: null, planType: "plus", type: "chatgpt" },
     requiresOpenaiAuth: true,
   }));
   assert.throws(() => assertFinanceAccountResponse({ account: { type: "apiKey" }, requiresOpenaiAuth: true }));
-  assert.doesNotThrow(() => assertFinanceLoginResponse({
-    loginId: "login_1",
-    type: "chatgptDeviceCode",
-    userCode: "ABCD-EFGH",
-    verificationUrl: "https://auth.openai.com/device",
-  }));
-  assert.throws(() => assertFinanceLoginResponse({ loginId: "login_1", type: "chatgpt", authUrl: "https://example.test" }));
 });
 
 test("finance response validator: accepts only a fresh in-progress empty turn", () => {

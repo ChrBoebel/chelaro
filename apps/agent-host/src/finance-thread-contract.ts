@@ -100,7 +100,10 @@ export function buildFinanceInitializeParams(version: string): InitializeParams 
   };
 }
 
-export function buildFinanceThreadStartParams(model?: string): FinanceThreadStartParams {
+export function buildFinanceThreadStartParams(
+  model?: string,
+  disabledMcpServerNames: readonly string[] = [],
+): FinanceThreadStartParams {
   if (model !== undefined && !/^[A-Za-z0-9._-]{1,128}$/.test(model)) {
     throw new FinanceThreadContractError("invalid_model");
   }
@@ -114,7 +117,9 @@ export function buildFinanceThreadStartParams(model?: string): FinanceThreadStar
     baseInstructions,
     config: {
       features,
-      mcp_servers: {},
+      mcp_servers: Object.fromEntries(
+        validatedMcpServerNames(disabledMcpServerNames).map((name) => [name, { enabled: false }]),
+      ),
       orchestrator: {
         mcp: { enabled: false },
         skills: { enabled: false },
@@ -185,8 +190,7 @@ export function assertFinanceThreadStartParams(value: unknown): asserts value is
     !isRecord(value.config) ||
     !hasExactKeys(value.config, ["features", "mcp_servers", "orchestrator", "skills", "tools", "web_search"]) ||
     value.config.web_search !== "disabled" ||
-    !isRecord(value.config.mcp_servers) ||
-    Object.keys(value.config.mcp_servers).length !== 0 ||
+    !isDisabledMcpServers(value.config.mcp_servers) ||
     !isDisabledEntries(value.config.orchestrator, ["mcp", "skills"]) ||
     !isRecord(value.config.skills) ||
     !hasExactKeys(value.config.skills, ["bundled", "include_instructions"]) ||
@@ -206,6 +210,16 @@ export function assertFinanceThreadStartParams(value: unknown): asserts value is
   }
 }
 
+export function configuredMcpServerNames(value: unknown): string[] {
+  if (!isRecord(value) || !isRecord(value.config)) {
+    throw new FinanceThreadContractError("invalid_contract");
+  }
+  const servers = value.config.mcp_servers;
+  if (servers === undefined || servers === null) return [];
+  if (!isRecord(servers)) throw new FinanceThreadContractError("invalid_contract");
+  return validatedMcpServerNames(Object.keys(servers));
+}
+
 export class FinanceThreadContractError extends Error {
   readonly code: "invalid_contract" | "invalid_model" | "invalid_version";
 
@@ -218,6 +232,27 @@ export class FinanceThreadContractError extends Error {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validatedMcpServerNames(value: readonly string[]): string[] {
+  if (value.length > 64) throw new FinanceThreadContractError("invalid_contract");
+  const names = [...new Set(value)];
+  if (names.length !== value.length || names.some((name) => !/^[A-Za-z0-9_-]{1,128}$/.test(name))) {
+    throw new FinanceThreadContractError("invalid_contract");
+  }
+  return names.sort();
+}
+
+function isDisabledMcpServers(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  try {
+    validatedMcpServerNames(Object.keys(value));
+  } catch {
+    return false;
+  }
+  return Object.values(value).every((server) =>
+    isRecord(server) && hasExactKeys(server, ["enabled"]) && server.enabled === false
+  );
 }
 
 function isDisabledEntries(value: unknown, keys: readonly string[]): boolean {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -41,7 +41,8 @@ test("codex provider: discovers the user CLI and reuses its normal credential ho
       status: "ready",
       version: SUPPORTED_CODEX_VERSION,
     });
-    assert.equal(provider.launch.binaryPath, state.executable);
+    assert(provider.launch);
+    assert.equal(provider.launch.binaryPath, realpathSync(state.executable));
     assert.equal(provider.launch.home, state.home);
     assert.equal(provider.launch.codexHome, state.codexHome);
   } finally {

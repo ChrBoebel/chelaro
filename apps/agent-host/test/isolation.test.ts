@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 
 import {
-  assertPinnedCodexBinary,
+  assertSupportedCodexBinary,
   assertSupportedPlatform,
   buildChildEnvironment,
   readPlatformIdentity,
@@ -14,10 +14,10 @@ const packageRoot = resolve(dirname(new URL(import.meta.url).pathname), "../..")
 const repositoryRoot = resolve(packageRoot, "../..");
 const nativeCodex = resolve(
   repositoryRoot,
-  "node_modules/.pnpm/@openai+codex@0.149.1-darwin-arm64/node_modules/@openai/codex/vendor/aarch64-apple-darwin/bin/codex",
+  "node_modules/.pnpm/@openai+codex@0.151.0-darwin-arm64/node_modules/@openai/codex/vendor/aarch64-apple-darwin/bin/codex",
 );
 
-test("isolation: platform and signed Codex identity gates are exact", () => {
+test("isolation: supported platform evidence and Codex version are exact", () => {
   const identity = readPlatformIdentity();
   assert.deepEqual(identity, {
     platform: "darwin",
@@ -29,10 +29,9 @@ test("isolation: platform and signed Codex identity gates are exact", () => {
     () => assertSupportedPlatform({ ...identity, macosVersion: "15.6.1" }),
     /Unsupported Codex isolation platform/,
   );
-  const binary = assertPinnedCodexBinary(nativeCodex);
-  assert.equal(binary.version, "0.149.1");
-  assert.equal(binary.teamIdentifier, "2DC432GLL2");
-  assert.match(binary.sha256, /^[a-f0-9]{64}$/);
+  const binary = assertSupportedCodexBinary(nativeCodex);
+  assert.equal(binary.version, "0.151.0");
+  assert.equal(binary.path, nativeCodex);
 });
 
 test("isolation: child environment is allowlisted and contains no inherited finance secrets", () => {

@@ -3,8 +3,11 @@ import { realpathSync } from "node:fs";
 
 import type { ServerNotification } from "../generated/codex/ts/ServerNotification.js";
 import type { ServerRequest } from "../generated/codex/ts/ServerRequest.js";
-import { buildFinanceInitializeParams } from "./finance-thread-contract.js";
-import { assertPinnedCodexBinary, buildChildEnvironment, PINNED_CODEX_VERSION } from "./isolation.js";
+import {
+  buildFinanceInitializeParams,
+  FINANCE_DISABLED_CODEX_FEATURES,
+} from "./finance-thread-contract.js";
+import { assertSupportedCodexBinary, buildChildEnvironment } from "./isolation.js";
 import {
   JsonRpcClient,
   JsonRpcTransportError,
@@ -21,6 +24,23 @@ import {
 export const CODEX_SHUTDOWN_TIMEOUT_MS = 5_000;
 export const CODEX_FORCE_KILL_TIMEOUT_MS = 1_000;
 export const FINANCE_HOST_VERSION = "0.1.0";
+
+export function buildCodexAppServerArguments(): string[] {
+  const overrides = [
+    "analytics.enabled=false",
+    "orchestrator.mcp.enabled=false",
+    "orchestrator.skills.enabled=false",
+    "skills.bundled.enabled=false",
+    "skills.include_instructions=false",
+    ...FINANCE_DISABLED_CODEX_FEATURES.map((feature) => `features.${feature}=false`),
+  ];
+  return [
+    "app-server",
+    "--stdio",
+    "--strict-config",
+    ...overrides.flatMap((override) => ["--config", override]),
+  ];
+}
 
 export type CodexProcessStatus = "stopped" | "starting" | "ready" | "stopping" | "crashed";
 
@@ -67,11 +87,11 @@ export class CodexProcess {
     this.#fatal = false;
     this.#stderrBytes = 0;
     try {
-      (this.#options.verifyBinary ?? assertPinnedCodexBinary)(this.#options.binaryPath);
+      (this.#options.verifyBinary ?? assertSupportedCodexBinary)(this.#options.binaryPath);
       const spawnImplementation = this.#options.spawnImplementation ?? spawn;
       const child = spawnImplementation(
         this.#options.binaryPath,
-        [...(this.#options.argumentsPrefix ?? []), "app-server", "--stdio", "--strict-config"],
+        [...(this.#options.argumentsPrefix ?? []), ...buildCodexAppServerArguments()],
         {
           cwd: this.#options.runtimeDirectory,
           detached: true,
@@ -112,9 +132,9 @@ export class CodexProcess {
       if (
         realpathSync(initialized.codexHome) !== realpathSync(this.#options.codexHome) ||
         initialized.platformOs !== "macos" ||
-        !initialized.userAgent.startsWith(`finance-os/${PINNED_CODEX_VERSION} `)
+        !initialized.userAgent.endsWith(` (finance-os; ${FINANCE_HOST_VERSION})`)
       ) {
-        throw new ProtocolValidationError("Codex initialize identity did not match the pinned finance runtime.");
+        throw new ProtocolValidationError("Codex initialize identity did not match the finance host.");
       }
       this.#status = "ready";
     } catch (error) {

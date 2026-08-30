@@ -1,14 +1,12 @@
 import { realpathSync } from "node:fs";
 
 import type { GetAccountResponse } from "../generated/codex/ts/v2/GetAccountResponse.js";
-import type { LoginAccountResponse } from "../generated/codex/ts/v2/LoginAccountResponse.js";
 import type { ThreadStartResponse } from "../generated/codex/ts/v2/ThreadStartResponse.js";
 import type { TurnStartResponse } from "../generated/codex/ts/v2/TurnStartResponse.js";
-import { PINNED_CODEX_VERSION } from "./isolation.js";
+import { SUPPORTED_CODEX_VERSION } from "./codex-provider.js";
 import {
   ProtocolValidationError,
   validateGetAccountResponse,
-  validateLoginAccountResponse,
   validateThreadStartResponse,
   validateTurnStartResponse,
 } from "./runtime-validator.js";
@@ -33,15 +31,6 @@ export function assertFinanceAccountResponse(value: unknown): asserts value is G
   validateGetAccountResponse(value);
   if (value.account !== null && value.account.type !== "chatgpt") {
     throw unsafe("The finance assistant requires ChatGPT account authentication.");
-  }
-}
-
-export function assertFinanceLoginResponse(value: unknown): asserts value is LoginAccountResponse & {
-  type: "chatgptDeviceCode";
-} {
-  validateLoginAccountResponse(value);
-  if (value.type !== "chatgptDeviceCode") {
-    throw unsafe("The finance assistant requires ChatGPT device-code authentication.");
   }
 }
 
@@ -74,7 +63,7 @@ export function assertSafeFinanceThreadResponse(
     response.thread.agentRole !== null ||
     response.thread.gitInfo !== null ||
     response.thread.modelProvider !== "openai" ||
-    response.thread.cliVersion !== PINNED_CODEX_VERSION ||
+    response.thread.cliVersion !== SUPPORTED_CODEX_VERSION ||
     response.thread.threadSource !== "appServer" ||
     response.thread.status.type !== "idle" ||
     response.thread.turns.length !== 0 ||
