@@ -45,12 +45,14 @@ test("GitHub publishes the DMG and checksum without Apple credentials", async ()
     "xcrun stapler",
     "latest-mac.yml",
     "*.zip.blockmap",
+    "pnpm release:check --",
   ]) {
     assert.doesNotMatch(workflow, new RegExp(escapeRegex(forbidden)));
   }
   for (const required of [
     "environment: macos-release",
     "pnpm quality",
+    "pnpm release:check \"$GITHUB_REF_NAME\"",
     "pnpm package:desktop",
     "hdiutil verify",
     "shasum -a 256 Chelaro-*.dmg",
@@ -77,7 +79,7 @@ test("the free update release uses one synchronized higher product version", asy
     JSON.parse(await readFile(file, "utf8"))
   ));
 
-  assert.deepEqual(packages.map(({ version }) => version), ["0.3.0", "0.3.0", "0.3.0"]);
+  assert.deepEqual(packages.map(({ version }) => version), ["0.3.1", "0.3.1", "0.3.1"]);
 });
 
 test("every pull request to main must increase the synchronized product version", async () => {

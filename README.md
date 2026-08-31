@@ -222,8 +222,8 @@ und stellt diesen Ablauf nicht als automatisches oder von Apple verifiziertes Up
 Release-, Prüf- und Rollback-Ablauf steht im
 [macOS Release and Update Process](docs/releases/RELEASE_PROCESS.md).
 
-Bestehende `0.2.x`-Installationen besitzen diesen kostenlosen Prüfer noch nicht. `0.3.0` ist deshalb
-die einmalig manuell zu installierende Basis; erst sie kann ein späteres `0.3.1` in der App
+Bestehende `0.2.x`-Installationen besitzen diesen kostenlosen Prüfer noch nicht. `0.3.1` ist deshalb
+die einmalig manuell zu installierende Basis; erst sie kann ein späteres `0.3.2` in der App
 ankündigen und herunterladen.
 
 ## Sicherheit und Datenintegrität

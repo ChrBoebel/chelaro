@@ -52,7 +52,7 @@ jobs:
         run: |
           git fetch origin main --depth=1
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-          pnpm release:check -- "$GITHUB_REF_NAME"
+          pnpm release:check "$GITHUB_REF_NAME"
       - name: Verify release quality
         run: pnpm quality
       - name: Build unsigned installer
