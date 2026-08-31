@@ -23,6 +23,11 @@ Publication remains blocked until the five Apple signing and notarization secret
 - A protected `macos-release` GitHub environment that requires owner approval and accepts only
   version tags matching `v*`.
 
+### Fixed
+
+- Standalone web packaging now copies the required SWC ESM helpers through one bounded post-build
+  step, preventing pnpm workspace symlinks from recursively embedding prior desktop artifacts.
+
 ### Security
 
 - `0.2.1` and `0.2.2` remain distinct immutable release commits and must pass the same Developer ID,
