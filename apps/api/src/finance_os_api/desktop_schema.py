@@ -4,7 +4,7 @@ from sqlalchemy import Connection, inspect, text
 
 from finance_os_api.domain.models import Base
 
-DESKTOP_SCHEMA_VERSION = 3
+DESKTOP_SCHEMA_VERSION = 4
 SCHEMA_TABLE = "desktop_schema_migrations"
 
 V1_PROPOSAL_COLUMNS = {
@@ -53,6 +53,8 @@ def prepare_desktop_schema(connection: Connection) -> None:
             migrate_v1_to_v2(connection)
         elif version == 2:
             migrate_v2_to_v3(connection)
+        elif version == 3:
+            migrate_v3_to_v4(connection)
         else:  # pragma: no cover - guarded by the supported range above
             raise RuntimeError(f"Missing desktop migration after version {version}.")
         version += 1
@@ -72,9 +74,7 @@ def migrate_v1_to_v2(connection: Connection) -> None:
     if columns != V1_PROPOSAL_COLUMNS:
         raise RuntimeError("Desktop schema version 1 proposal columns do not match the baseline.")
 
-    connection.exec_driver_sql(
-        "DROP INDEX IF EXISTS ix_finance_change_proposals_status_created"
-    )
+    connection.exec_driver_sql("DROP INDEX IF EXISTS ix_finance_change_proposals_status_created")
     connection.exec_driver_sql(
         "ALTER TABLE finance_change_proposals RENAME TO finance_change_proposals_v1"
     )
@@ -221,6 +221,26 @@ def migrate_v2_to_v3(connection: Connection) -> None:
                 AND event.event_type = proposal.status
           )
         """
+    )
+
+
+def migrate_v3_to_v4(connection: Connection) -> None:
+    """Add durable local finance-assistant conversations without rewriting finance data."""
+
+    expected_absent = {
+        "assistant_activities",
+        "assistant_conversation_events",
+        "assistant_conversations",
+        "assistant_messages",
+        "assistant_provider_runtime",
+        "assistant_turns",
+    }
+    existing = set(inspect(connection).get_table_names())
+    if expected_absent & existing:
+        raise RuntimeError("Desktop schema version 3 already contains assistant history tables.")
+    Base.metadata.create_all(
+        connection,
+        tables=[Base.metadata.tables[name] for name in sorted(expected_absent)],
     )
 
 

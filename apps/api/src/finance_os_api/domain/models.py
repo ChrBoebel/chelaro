@@ -653,8 +653,8 @@ class FinanceProposalEvent(Base):
         Text,
         nullable=False,
     )
-    actor_type: Mapped[Literal["owner", "agent", "finance_assistant", "system"]] = (
-        mapped_column(Text, nullable=False)
+    actor_type: Mapped[Literal["owner", "agent", "finance_assistant", "system"]] = mapped_column(
+        Text, nullable=False
     )
     actor_id: Mapped[str] = mapped_column(Text, nullable=False)
     request_id: Mapped[UUID] = mapped_column(nullable=False)
@@ -662,6 +662,268 @@ class FinanceProposalEvent(Base):
     provider_thread_id: Mapped[str | None] = mapped_column(String(128))
     provider_turn_id: Mapped[str | None] = mapped_column(String(128))
     provider_call_id: Mapped[str | None] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class AssistantConversation(Base):
+    __tablename__ = "assistant_conversations"
+    __table_args__ = (
+        CheckConstraint("version > 0", name="ck_assistant_conversations_version_positive"),
+        CheckConstraint(
+            "status IN ('active', 'archived', 'deleted')",
+            name="ck_assistant_conversations_status",
+        ),
+        CheckConstraint(
+            "message_count >= 0",
+            name="ck_assistant_conversations_message_count_non_negative",
+        ),
+        Index(
+            "ix_assistant_conversations_status_activity",
+            "status",
+            "last_message_at",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(DATABASE_ID, Identity(), primary_key=True)
+    public_id: Mapped[UUID] = mapped_column(default=uuid4, nullable=False, unique=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[Literal["active", "archived", "deleted"]] = mapped_column(
+        Text,
+        nullable=False,
+        default="active",
+        server_default="active",
+    )
+    message_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AssistantMessage(Base):
+    __tablename__ = "assistant_messages"
+    __table_args__ = (
+        CheckConstraint("sequence > 0", name="ck_assistant_messages_sequence_positive"),
+        CheckConstraint(
+            "role IN ('user', 'assistant')",
+            name="ck_assistant_messages_role",
+        ),
+        CheckConstraint(
+            "status IN ('complete', 'interrupted', 'failed')",
+            name="ck_assistant_messages_status",
+        ),
+        postgresql_check(
+            "sha256 ~ '^[0-9a-f]{64}$'",
+            name="ck_assistant_messages_sha256_format",
+        ),
+        UniqueConstraint(
+            "conversation_id",
+            "sequence",
+            name="uq_assistant_messages_conversation_sequence",
+        ),
+        UniqueConstraint(
+            "conversation_id",
+            "turn_id",
+            "provider_message_id",
+            name="uq_assistant_messages_provider_message",
+        ),
+        Index(
+            "ix_assistant_messages_conversation_sequence",
+            "conversation_id",
+            "sequence",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(DATABASE_ID, Identity(), primary_key=True)
+    public_id: Mapped[UUID] = mapped_column(default=uuid4, nullable=False, unique=True)
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("assistant_conversations.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    turn_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    provider_message_id: Mapped[str | None] = mapped_column(String(128))
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    role: Mapped[Literal["user", "assistant"]] = mapped_column(Text, nullable=False)
+    status: Mapped[Literal["complete", "interrupted", "failed"]] = mapped_column(
+        Text,
+        nullable=False,
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class AssistantTurn(Base):
+    __tablename__ = "assistant_turns"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('reserved', 'running', 'completed', 'interrupted', 'failed')",
+            name="ck_assistant_turns_status",
+        ),
+        postgresql_check(
+            "request_fingerprint ~ '^[0-9a-f]{64}$'",
+            name="ck_assistant_turns_fingerprint_format",
+        ),
+        UniqueConstraint("public_id", name="uq_assistant_turns_public_id"),
+        Index(
+            "ix_assistant_turns_conversation_created",
+            "conversation_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(DATABASE_ID, Identity(), primary_key=True)
+    public_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("assistant_conversations.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    user_message_id: Mapped[int] = mapped_column(
+        ForeignKey("assistant_messages.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    status: Mapped[Literal["reserved", "running", "completed", "interrupted", "failed"]] = (
+        mapped_column(Text, nullable=False)
+    )
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider_turn_id: Mapped[str | None] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AssistantActivity(Base):
+    __tablename__ = "assistant_activities"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('proposal_created', 'turn_interrupted', 'turn_failed')",
+            name="ck_assistant_activities_kind",
+        ),
+        Index(
+            "ix_assistant_activities_conversation_created",
+            "conversation_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(DATABASE_ID, Identity(), primary_key=True)
+    public_id: Mapped[UUID] = mapped_column(default=uuid4, nullable=False, unique=True)
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("assistant_conversations.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    turn_id: Mapped[str | None] = mapped_column(String(128))
+    kind: Mapped[Literal["proposal_created", "turn_interrupted", "turn_failed"]] = mapped_column(
+        Text, nullable=False
+    )
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    reference_public_id: Mapped[UUID | None] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class AssistantProviderRuntime(Base):
+    __tablename__ = "assistant_provider_runtime"
+    __table_args__ = (
+        CheckConstraint("provider_name IN ('codex')", name="ck_assistant_runtime_provider"),
+    )
+
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("assistant_conversations.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    provider_name: Mapped[Literal["codex"]] = mapped_column(
+        Text,
+        nullable=False,
+        default="codex",
+        server_default="codex",
+    )
+    provider_thread_id: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class AssistantConversationEvent(Base):
+    __tablename__ = "assistant_conversation_events"
+    __table_args__ = (
+        CheckConstraint(
+            "event_type IN ("
+            "'created', 'renamed', 'archived', 'restored', 'deleted', "
+            "'provider_bound', 'turn_reserved', 'turn_completed', "
+            "'turn_interrupted', 'turn_failed'"
+            ")",
+            name="ck_assistant_conversation_events_type",
+        ),
+        CheckConstraint(
+            "actor_type IN ('owner', 'finance_assistant', 'system')",
+            name="ck_assistant_conversation_events_actor_type",
+        ),
+        Index(
+            "ix_assistant_conversation_events_conversation_created",
+            "conversation_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(DATABASE_ID, Identity(), primary_key=True)
+    public_id: Mapped[UUID] = mapped_column(default=uuid4, nullable=False, unique=True)
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("assistant_conversations.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    event_type: Mapped[
+        Literal[
+            "created",
+            "renamed",
+            "archived",
+            "restored",
+            "deleted",
+            "provider_bound",
+            "turn_reserved",
+            "turn_completed",
+            "turn_interrupted",
+            "turn_failed",
+        ]
+    ] = mapped_column(Text, nullable=False)
+    actor_type: Mapped[Literal["owner", "finance_assistant", "system"]] = mapped_column(
+        Text,
+        nullable=False,
+    )
+    actor_id: Mapped[str] = mapped_column(Text, nullable=False)
+    turn_id: Mapped[str | None] = mapped_column(String(128))
+    details_json: Mapped[dict[str, object]] = mapped_column("details", JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
