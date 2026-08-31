@@ -2,6 +2,7 @@ import type { InitializeParams } from "../generated/codex/ts/InitializeParams.js
 import type { JsonValue } from "../generated/codex/ts/serde_json/JsonValue.js";
 import type { DynamicToolSpec } from "../generated/codex/ts/v2/DynamicToolSpec.js";
 import type { ThreadStartParams } from "../generated/codex/ts/v2/ThreadStartParams.js";
+import type { ThreadResumeParams } from "../generated/codex/ts/v2/ThreadResumeParams.js";
 import type { TurnEnvironmentParams } from "../generated/codex/ts/v2/TurnEnvironmentParams.js";
 import {
   FINANCE_DYNAMIC_TOOLS,
@@ -21,6 +22,7 @@ export const FINANCE_DISABLED_CODEX_FEATURES = [
   "enable_mcp_apps",
   "enable_request_compression",
   "hooks",
+  "goals",
   "image_generation",
   "in_app_browser",
   "js_repl",
@@ -66,6 +68,21 @@ export type FinanceThreadStartParams = StableFinanceThreadFields & {
   dynamicTools: readonly DynamicToolSpec[];
   environments: readonly TurnEnvironmentParams[];
 };
+
+export type FinanceThreadResumeParams = Pick<
+  ThreadResumeParams,
+  | "approvalPolicy"
+  | "approvalsReviewer"
+  | "baseInstructions"
+  | "config"
+  | "cwd"
+  | "developerInstructions"
+  | "excludeTurns"
+  | "model"
+  | "personality"
+  | "sandbox"
+  | "threadId"
+>;
 
 const baseInstructions = [
   "Du bist der persönliche Finanzassistent in Chelaro und antwortest standardmäßig auf Deutsch.",
@@ -145,7 +162,7 @@ export function buildFinanceThreadStartParams(
     developerInstructions,
     dynamicTools: FINANCE_DYNAMIC_TOOLS,
     environments: [],
-    ephemeral: true,
+    ephemeral: false,
     personality: "pragmatic",
     sandbox: "read-only",
     serviceName: FINANCE_ASSISTANT_SERVICE_NAME,
@@ -182,7 +199,7 @@ export function assertFinanceThreadStartParams(value: unknown): asserts value is
     value.approvalPolicy !== "never" ||
     value.approvalsReviewer !== "user" ||
     value.cwd !== null ||
-    value.ephemeral !== true ||
+    value.ephemeral !== false ||
     value.personality !== "pragmatic" ||
     value.sandbox !== "read-only" ||
     value.serviceName !== FINANCE_ASSISTANT_SERVICE_NAME ||
@@ -217,6 +234,30 @@ export function assertFinanceThreadStartParams(value: unknown): asserts value is
   ) {
     throw new FinanceThreadContractError("invalid_contract");
   }
+}
+
+export function buildFinanceThreadResumeParams(
+  threadId: string,
+  model?: string,
+  disabledMcpServerNames: readonly string[] = [],
+): FinanceThreadResumeParams {
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(threadId)) {
+    throw new FinanceThreadContractError("invalid_contract");
+  }
+  const started = buildFinanceThreadStartParams(model, disabledMcpServerNames);
+  return {
+    ...(started.model === undefined ? {} : { model: started.model }),
+    approvalPolicy: started.approvalPolicy!,
+    approvalsReviewer: started.approvalsReviewer!,
+    baseInstructions: started.baseInstructions!,
+    config: started.config!,
+    cwd: started.cwd!,
+    developerInstructions: started.developerInstructions!,
+    excludeTurns: true,
+    personality: started.personality!,
+    sandbox: started.sandbox!,
+    threadId,
+  };
 }
 
 export function configuredMcpServerNames(value: unknown): string[] {

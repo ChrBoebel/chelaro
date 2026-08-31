@@ -2,6 +2,7 @@ import { realpathSync } from "node:fs";
 
 import type { GetAccountResponse } from "../generated/codex/ts/v2/GetAccountResponse.js";
 import type { ThreadStartResponse } from "../generated/codex/ts/v2/ThreadStartResponse.js";
+import type { ThreadResumeResponse } from "../generated/codex/ts/v2/ThreadResumeResponse.js";
 import type { ThreadUnsubscribeResponse } from "../generated/codex/ts/v2/ThreadUnsubscribeResponse.js";
 import type { TurnStartResponse } from "../generated/codex/ts/v2/TurnStartResponse.js";
 import { SUPPORTED_CODEX_VERSION } from "./codex-provider.js";
@@ -9,6 +10,7 @@ import {
   ProtocolValidationError,
   validateGetAccountResponse,
   validateThreadStartResponse,
+  validateThreadResumeResponse,
   validateTurnStartResponse,
 } from "./runtime-validator.js";
 
@@ -38,9 +40,11 @@ export function assertFinanceAccountResponse(value: unknown): asserts value is G
 export function assertSafeFinanceThreadResponse(
   value: unknown,
   runtimeDirectory: string,
-): asserts value is ThreadStartResponse {
-  validateThreadStartResponse(value);
-  const response = value as ThreadStartResponse & Record<string, unknown>;
+  operation: "resume" | "start" = "start",
+): asserts value is ThreadResumeResponse | ThreadStartResponse {
+  if (operation === "resume") validateThreadResumeResponse(value);
+  else validateThreadStartResponse(value);
+  const response = value as (ThreadResumeResponse | ThreadStartResponse) & Record<string, unknown>;
   const runtimeRoot = realpathSync(runtimeDirectory);
   if (
     JSON.stringify(Object.keys(response).sort()) !== JSON.stringify(exactThreadResponseKeys) ||
@@ -56,8 +60,9 @@ export function assertSafeFinanceThreadResponse(
     response.sandbox.type !== "readOnly" ||
     response.sandbox.networkAccess !== false ||
     realpathSync(response.thread.cwd) !== runtimeRoot ||
-    response.thread.ephemeral !== true ||
-    response.thread.path !== null ||
+    response.thread.ephemeral !== false ||
+    typeof response.thread.path !== "string" ||
+    !response.thread.path.startsWith("/") ||
     response.thread.parentThreadId !== null ||
     response.thread.forkedFromId !== null ||
     response.thread.agentNickname !== null ||
@@ -97,6 +102,12 @@ export function assertFinanceThreadUnsubscribeResponse(
     JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(["status"]) ||
     value.status !== "unsubscribed"
   ) throw unsafe("Codex did not unsubscribe the finance thread.");
+}
+
+export function assertFinanceThreadDeleteResponse(value: unknown): void {
+  if (!isRecord(value) || Object.keys(value).length !== 0) {
+    throw unsafe("Codex did not delete the finance thread.");
+  }
 }
 
 function validProviderId(value: string): boolean {

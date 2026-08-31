@@ -35,11 +35,19 @@ export type FinanceChatStreamEvent =
 
 interface ActiveMessage {
   completed: boolean;
+  digest?: string;
   hasher: Hash;
   messageId: string;
+  providerMessageId: string;
   nextSequence: number;
   parts: Buffer[];
   totalBytes: number;
+}
+
+export interface CompletedAssistantMessage {
+  message_id: string;
+  sha256: string;
+  text: string;
 }
 
 export interface FinanceAssistantStreamProjectorOptions {
@@ -92,23 +100,39 @@ export class FinanceAssistantStreamProjector {
       throw new FinanceChatStreamError("content_mismatch");
     }
     message.completed = true;
-    this.#emit({
-      messageId: message.messageId,
-      sessionId: this.#sessionId,
-      sha256: message.hasher.digest("hex"),
-      totalBytes: message.totalBytes,
-      turnId: this.#turnId,
-      type: "assistant.message.completed",
-    });
+    const digest = message.hasher.digest("hex");
+    message.digest = digest;
     return true;
   }
 
-  finishTurn(): void {
+  finishTurn(): CompletedAssistantMessage[] {
     this.#assertActive();
     if ([...this.#messages.values()].some(({ completed }) => !completed)) {
       throw new FinanceChatStreamError("incomplete_message");
     }
     this.#terminal = true;
+    return [...this.#messages.values()].map((message) => ({
+      message_id: message.providerMessageId,
+      sha256: message.digest!,
+      text: Buffer.concat(message.parts, message.totalBytes).toString("utf8"),
+    }));
+  }
+
+  publishCompletions(): void {
+    if (!this.#terminal) throw new FinanceChatStreamError("stream_terminal");
+    for (const message of this.#messages.values()) {
+      if (!message.completed || !message.digest) {
+        throw new FinanceChatStreamError("incomplete_message");
+      }
+      this.#emit({
+        messageId: message.messageId,
+        sessionId: this.#sessionId,
+        sha256: message.digest,
+        totalBytes: message.totalBytes,
+        turnId: this.#turnId,
+        type: "assistant.message.completed",
+      });
+    }
   }
 
   abort(): void {
@@ -152,6 +176,7 @@ export class FinanceAssistantStreamProjector {
       completed: false,
       hasher: createHash("sha256"),
       messageId: `message_${this.#messages.size + 1}`,
+      providerMessageId: providerItemId,
       nextSequence: 0,
       parts: [],
       totalBytes: 0,

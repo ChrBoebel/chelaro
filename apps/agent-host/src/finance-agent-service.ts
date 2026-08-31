@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { ServerNotification } from "../generated/codex/ts/ServerNotification.js";
 import type { ServerRequest } from "../generated/codex/ts/ServerRequest.js";
 import { CodexProcess } from "./codex-process.js";
+import type { AssistantHistoryApi } from "./finance-api-client.js";
 import {
   FINANCE_CONSENT_VERSION,
   FinanceConsentJournal,
@@ -24,12 +25,14 @@ import {
 } from "./finance-chat-stream.js";
 import {
   assertFinanceThreadUnsubscribeResponse,
+  assertFinanceThreadDeleteResponse,
   assertFinanceTurnStartResponse,
   assertSafeFinanceThreadResponse,
 } from "./finance-response-validator.js";
 import { FinanceServerRequestHandler } from "./finance-server-request-handler.js";
 import {
   buildFinanceThreadStartParams,
+  buildFinanceThreadResumeParams,
   configuredMcpServerNames,
 } from "./finance-thread-contract.js";
 import {
@@ -77,7 +80,11 @@ export interface FinanceAgentSnapshot {
   consent: FinanceChatState["consent"];
   host: FinanceChatState["host"];
   provider: CodexProviderSnapshot;
-  session: null | { id: string; status: NonNullable<FinanceChatState["session"]>["status"] };
+  session: null | {
+    conversationId: string | null;
+    id: string;
+    status: NonNullable<FinanceChatState["session"]>["status"];
+  };
   turn: null | { id: string; status: NonNullable<FinanceChatState["turn"]>["status"] };
 }
 
@@ -94,6 +101,8 @@ export class FinanceAgentService {
   readonly #options: FinanceAgentServiceOptions;
   #dispatcher: FinanceToolDispatcher | undefined;
   #handler: FinanceServerRequestHandler | undefined;
+  #history: AssistantHistoryApi | undefined;
+  #conversationId: string | undefined;
   #process: FinanceCodexProcessPort | undefined;
   #provider: CodexProviderSnapshot = { status: "checking", version: null };
   #projector: FinanceAssistantStreamProjector | undefined;
@@ -117,7 +126,11 @@ export class FinanceAgentService {
       host: this.#state.host,
       provider: { ...this.#provider },
       session: this.#state.session
-        ? { id: this.#state.session.id, status: this.#state.session.status }
+        ? {
+            conversationId: this.#conversationId ?? null,
+            id: this.#state.session.id,
+            status: this.#state.session.status,
+          }
         : null,
       turn: this.#state.turn ? { id: this.#state.turn.id, status: this.#state.turn.status } : null,
     };
@@ -135,11 +148,12 @@ export class FinanceAgentService {
     }
   }
 
-  configureFinanceApi(api: FinanceToolApi): void {
+  configureFinanceApi(api: FinanceToolApi & AssistantHistoryApi): void {
     if (this.#state.host !== "ready" || this.#dispatcher) {
       throw new FinanceAgentServiceError("invalid_state");
     }
     const dispatcher = new FinanceToolDispatcher(api, this.#consent);
+    this.#history = api;
     this.#dispatcher = dispatcher;
     this.#handler = new FinanceServerRequestHandler({
       dispatcher,
@@ -169,8 +183,10 @@ export class FinanceAgentService {
     });
   }
 
-  async createSession(sessionId: string): Promise<void> {
+  async createSession(sessionId: string, conversationId: string): Promise<void> {
     const dispatcher = this.#requiredDispatcher();
+    const history = this.#requiredHistory();
+    const validatedConversationId = validId(conversationId);
     this.#consent.assertGranted(FINANCE_CONSENT_VERSION);
     if (this.#state.auth !== "authenticated") throw new FinanceAgentServiceError("authentication_required");
     this.#transition({ type: "session.start", consentVersion: FINANCE_CONSENT_VERSION, sessionId });
@@ -181,11 +197,22 @@ export class FinanceAgentService {
         cwd: this.#options.runtimeDirectory,
         includeLayers: false,
       });
+      const disabledServers = configuredMcpServerNames(configuration);
+      const providerThreadId = await history.getConversationRuntime(validatedConversationId);
+      const operation = providerThreadId === null ? "start" : "resume";
       const response = await process.request(
-        "thread/start",
-        buildFinanceThreadStartParams(this.#model, configuredMcpServerNames(configuration)),
+        operation === "start" ? "thread/start" : "thread/resume",
+        operation === "start"
+          ? buildFinanceThreadStartParams(this.#model, disabledServers)
+          : buildFinanceThreadResumeParams(providerThreadId!, this.#model, disabledServers),
       );
-      assertSafeFinanceThreadResponse(response, this.#options.runtimeDirectory);
+      assertSafeFinanceThreadResponse(response, this.#options.runtimeDirectory, operation);
+      if (providerThreadId !== null && response.thread.id !== providerThreadId) {
+        throw new FinanceAgentServiceError("protocol_incompatible");
+      }
+      if (providerThreadId === null) {
+        await history.bindConversationRuntime(validatedConversationId, response.thread.id);
+      }
       dispatcher.startSession({
         consentVersion: FINANCE_CONSENT_VERSION,
         hostEpoch: this.#hostEpoch,
@@ -193,6 +220,7 @@ export class FinanceAgentService {
         sessionId,
       });
       dispatcherStarted = true;
+      this.#conversationId = validatedConversationId;
       this.#transition({ type: "session.ready", providerThreadId: response.thread.id, sessionId });
     } catch (error) {
       if (dispatcherStarted) {
@@ -214,16 +242,35 @@ export class FinanceAgentService {
       assertFinanceThreadUnsubscribeResponse(response);
     }
     this.#dispatcher?.closeSession();
+    this.#conversationId = undefined;
     this.#transition({ type: "session.close", sessionId });
+  }
+
+  async deleteConversation(conversationId: string): Promise<void> {
+    const validatedConversationId = validId(conversationId);
+    if (this.#conversationId === validatedConversationId &&
+      this.#state.session?.status !== "closed") {
+      throw new FinanceAgentServiceError("session_busy");
+    }
+    const providerThreadId = await this.#requiredHistory().getConversationRuntime(
+      validatedConversationId,
+    );
+    if (providerThreadId === null) return;
+    const response = await this.#requiredProcess().request("thread/delete", {
+      threadId: providerThreadId,
+    });
+    assertFinanceThreadDeleteResponse(response);
   }
 
   async startTurn(sessionId: string, turnId: string, prompt: string): Promise<void> {
     validPrompt(prompt);
+    const conversationId = this.#conversationId;
     const session = this.#state.session;
-    if (!session?.providerThreadId || session.id !== validId(sessionId)) {
+    if (!session?.providerThreadId || !conversationId || session.id !== validId(sessionId)) {
       throw new FinanceAgentServiceError("resource_not_found");
     }
     this.#consent.assertGranted(session.consentVersion);
+    await this.#requiredHistory().reserveConversationTurn(conversationId, validId(turnId), prompt);
     this.#transition({ type: "turn.start", sessionId, turnId });
     this.#turnStarting = true;
     this.#earlyTurnNotifications = [];
@@ -260,6 +307,9 @@ export class FinanceAgentService {
       if (isActiveTurn(this.#state.turn)) {
         this.#transition({ type: "turn.finish", status: "failed", turnId });
       }
+      await this.#requiredHistory()
+        .failConversationTurn(conversationId, turnId, "failed", "provider_turn_start_failed")
+        .catch(() => undefined);
       throw mapServiceError(error, "turn_failed");
     }
   }
@@ -290,6 +340,7 @@ export class FinanceAgentService {
       this.#projector = undefined;
       try { this.#dispatcher?.finishTurn(); } catch { /* Child shutdown is the final deny boundary. */ }
       this.#transition({ type: "turn.finish", status: "interrupted", turnId });
+      await this.#persistFailedTurn(turnId, "interrupted", "consent_revoked");
     }
     const session = this.#state.session;
     if (session && session.status !== "closed") {
@@ -319,6 +370,7 @@ export class FinanceAgentService {
       this.#projector?.abort();
       try { this.#dispatcher?.finishTurn(); } catch { /* Continue fail-closed shutdown. */ }
       this.#transition({ type: "turn.finish", status: "interrupted", turnId });
+      await this.#persistFailedTurn(turnId, "interrupted", "host_stopped");
     }
     if (this.#state.session && this.#state.session.status !== "closed") {
       await this.closeSession(this.#state.session.id).catch(() => this.#handleFatalProcessError());
@@ -395,15 +447,17 @@ export class FinanceAgentService {
         assertProviderTurn(notification.params.threadId, notification.params.turn.id, session.providerThreadId, turn.providerTurnId);
         const status = notification.params.turn.status;
         if (status === "inProgress") throw new FinanceAgentServiceError("protocol_incompatible");
-        if (status === "completed") this.#requiredProjector().finishTurn();
-        else this.#projector?.abort();
-        this.#projector = undefined;
+        const projector = this.#projector;
+        const messages = status === "completed" ? this.#requiredProjector().finishTurn() : [];
+        if (status !== "completed") projector?.abort();
         this.#requiredDispatcher().finishTurn();
-        this.#transition({
-          type: "turn.finish",
-          status: status === "completed" ? "completed" : status === "interrupted" ? "interrupted" : "failed",
-          turnId: turn.id,
-        });
+        void this.#persistTerminalTurn(
+          turn.id,
+          turn.providerTurnId,
+          status === "completed" ? "completed" : status === "interrupted" ? "interrupted" : "failed",
+          messages,
+          projector,
+        );
         return;
       }
       default:
@@ -420,6 +474,7 @@ export class FinanceAgentService {
   }
 
   #handleFatalProcessError(): void {
+    const activeTurnId = isActiveTurn(this.#state.turn) ? this.#state.turn.id : undefined;
     this.#setProvider({ status: "error", version: this.#provider.version });
     this.#projector?.abort();
     this.#projector = undefined;
@@ -431,15 +486,20 @@ export class FinanceAgentService {
         // The first fatal transition is authoritative.
       }
     }
+    if (activeTurnId) {
+      void this.#persistFailedTurn(activeTurnId, "failed", "provider_process_failed");
+    }
   }
 
   #syncAuth(status: FinanceAuthStatus): void {
     if (this.#state.auth === status) return;
     if (status === "logged_out" && isActiveTurn(this.#state.turn)) {
+      const turnId = this.#state.turn.id;
       void this.interruptTurn().catch(() => undefined);
       this.#projector?.abort();
       this.#projector = undefined;
       try { this.#dispatcher?.finishTurn(); } catch { this.#dispatcher?.abandonSession(); }
+      void this.#persistFailedTurn(turnId, "failed", "authentication_lost");
     }
     this.#transition({ type: "auth.status", status });
   }
@@ -536,6 +596,66 @@ export class FinanceAgentService {
   #requiredProjector(): FinanceAssistantStreamProjector {
     if (!this.#projector) throw new FinanceAgentServiceError("protocol_incompatible");
     return this.#projector;
+  }
+
+  #requiredHistory(): AssistantHistoryApi {
+    if (!this.#history) throw new FinanceAgentServiceError("finance_api_unavailable");
+    return this.#history;
+  }
+
+  async #persistTerminalTurn(
+    turnId: string,
+    providerTurnId: string,
+    status: "completed" | "failed" | "interrupted",
+    messages: ReturnType<FinanceAssistantStreamProjector["finishTurn"]>,
+    projector: FinanceAssistantStreamProjector | undefined,
+  ): Promise<void> {
+    const conversationId = this.#conversationId;
+    if (!conversationId) return this.#finishPersistenceFailure(turnId);
+    try {
+      if (status === "completed") {
+        await this.#requiredHistory().completeConversationTurn(
+          conversationId,
+          turnId,
+          providerTurnId,
+          messages,
+        );
+        projector?.publishCompletions();
+      } else {
+        await this.#requiredHistory().failConversationTurn(
+          conversationId,
+          turnId,
+          status,
+          status === "interrupted" ? "provider_interrupted" : "provider_failed",
+        );
+      }
+      this.#projector = undefined;
+      this.#transition({ type: "turn.finish", status, turnId });
+    } catch {
+      projector?.abort();
+      this.#projector = undefined;
+      this.#finishPersistenceFailure(turnId);
+    }
+  }
+
+  #finishPersistenceFailure(turnId: string): void {
+    if (isActiveTurn(this.#state.turn)) {
+      this.#transition({ type: "turn.finish", status: "failed", turnId });
+    }
+  }
+
+  async #persistFailedTurn(
+    turnId: string,
+    status: "failed" | "interrupted",
+    errorCode: string,
+  ): Promise<void> {
+    if (!this.#conversationId || !this.#history) return;
+    await this.#history.failConversationTurn(
+      this.#conversationId,
+      turnId,
+      status,
+      errorCode,
+    ).catch(() => undefined);
   }
 }
 
