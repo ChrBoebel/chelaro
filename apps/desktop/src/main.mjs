@@ -2,9 +2,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeFile } from "node:fs/promises";
 
-import { existsSync } from "node:fs";
-
-import { app, BrowserWindow, dialog, ipcMain, Menu, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from "electron";
+import { createGitHubReleaseClient } from "./github-release-client.mjs";
 import { loadingPageUrl } from "./loading-page.mjs";
 import { runFinanceAssistantE2e } from "./finance-assistant-e2e.mjs";
 import {
@@ -40,18 +39,6 @@ let appOrigin;
 let shutdownComplete = false;
 let shutdownPromise;
 let updateManager;
-
-async function loadConfiguredUpdater() {
-  const configurationPath = path.join(process.resourcesPath, "app-update.yml");
-  if (!app.isPackaged || !existsSync(configurationPath)) {
-    return { updater: undefined, isEnabled: false };
-  }
-
-  const updaterModule = await import("electron-updater");
-  const updater = updaterModule.autoUpdater ?? updaterModule.default?.autoUpdater;
-  if (!updater) throw new Error("The desktop updater could not be loaded.");
-  return { updater, isEnabled: true };
-}
 
 function createMainWindow() {
   const window = new BrowserWindow({
@@ -189,21 +176,18 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
       callback(false);
     });
-    let updaterConfiguration = { updater: undefined, isEnabled: false };
-    try {
-      updaterConfiguration = await loadConfiguredUpdater();
-    } catch (error) {
-      console.error("[desktop] Update-Funktion konnte nicht geladen werden:", error);
-    }
     updateManager = createUpdateManager({
-      updater: updaterConfiguration.updater,
+      releaseClient: createGitHubReleaseClient(),
       ipcMain,
       getWindow: () => mainWindow,
-      isEnabled: updaterConfiguration.isEnabled,
-      stopServices: async () => {
-        await processManager.stopAll();
-        shutdownComplete = true;
+      isEnabled: app.isPackaged && process.platform === "darwin",
+      currentVersion: app.getVersion(),
+      downloadsDirectory: app.getPath("downloads"),
+      openInstaller: async (installerPath) => {
+        const errorMessage = await shell.openPath(installerPath);
+        if (errorMessage) throw new Error(errorMessage);
       },
+      openReleasePage: (releasePageUrl) => shell.openExternal(releasePageUrl),
     });
     await bootstrap();
   });

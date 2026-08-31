@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
-import { EventEmitter } from "node:events";
 import test from "node:test";
 
 import { UPDATE_CHANNELS, createUpdateManager } from "../src/update-manager.mjs";
 
-function createHarness({ enabled = true } = {}) {
-  const updater = new EventEmitter();
-  updater.downloadUpdate = async () => {};
-  updater.quitAndInstall = () => {};
-  updater.checkForUpdates = async () => {};
+const release = Object.freeze({
+  version: "0.3.0",
+  pageUrl: "https://github.com/ChrBoebel/chelaro/releases/tag/v0.3.0",
+});
+
+function createHarness({ enabled = true, latestRelease = release } = {}) {
   const handlers = new Map();
   const sent = [];
   const webContents = {
@@ -19,88 +19,94 @@ function createHarness({ enabled = true } = {}) {
     removeHandler: (channel) => handlers.delete(channel),
   };
   const window = { isDestroyed: () => false, webContents };
-  let servicesStopped = false;
+  const openedInstallers = [];
+  const openedReleasePages = [];
+  const releaseClient = {
+    getLatestRelease: async () => latestRelease,
+    downloadRelease: async (_release, destination, onProgress) => {
+      onProgress(42);
+      return `${destination}/Chelaro-0.3.0-arm64.dmg`;
+    },
+  };
   const manager = createUpdateManager({
-    updater,
+    releaseClient,
     ipcMain,
     getWindow: () => window,
     isEnabled: enabled,
-    stopServices: async () => {
-      servicesStopped = true;
-    },
+    currentVersion: "0.2.2",
+    downloadsDirectory: "/synthetic-downloads",
+    openInstaller: async (installerPath) => openedInstallers.push(installerPath),
+    openReleasePage: async (releasePageUrl) => openedReleasePages.push(releasePageUrl),
     initialCheckDelayMs: 60_000,
     checkIntervalMs: 60_000,
     logger: { error: () => {} },
   });
-  const invoke = (channel) => handlers.get(channel)({ sender: webContents });
-  return { updater, manager, sent, invoke, servicesStopped: () => servicesStopped };
+  const invoke = (channel, sender = webContents) => handlers.get(channel)({ sender });
+  return {
+    invoke,
+    manager,
+    openedInstallers,
+    openedReleasePages,
+    releaseClient,
+    sent,
+  };
 }
 
-test("update flow exposes the button only after a newer version is known", async () => {
+test("a newer stable release is announced and downloaded with progress", async () => {
   const harness = createHarness();
 
   assert.deepEqual(await harness.invoke(UPDATE_CHANNELS.getState), { status: "idle" });
-  harness.updater.emit("update-available", { version: "0.2.1" });
-  assert.deepEqual(harness.manager.getState(), { status: "available", version: "0.2.1" });
+  await harness.invoke(UPDATE_CHANNELS.check);
+  assert.deepEqual(harness.manager.getState(), { status: "available", version: "0.3.0" });
+
+  await harness.invoke(UPDATE_CHANNELS.download);
+  assert.deepEqual(harness.manager.getState(), { status: "downloaded", version: "0.3.0" });
+  assert.ok(harness.sent.some(({ state }) => state.status === "downloading" && state.percent === 42));
+  harness.manager.stop();
+});
+
+test("opening the verified DMG and release page uses only manager-owned paths and URLs", async () => {
+  const harness = createHarness();
+  await harness.invoke(UPDATE_CHANNELS.check);
+  await harness.invoke(UPDATE_CHANNELS.openReleasePage);
+  await harness.invoke(UPDATE_CHANNELS.download);
+  await harness.invoke(UPDATE_CHANNELS.openInstaller);
+
+  assert.deepEqual(harness.openedReleasePages, [release.pageUrl]);
+  assert.deepEqual(harness.openedInstallers, ["/synthetic-downloads/Chelaro-0.3.0-arm64.dmg"]);
+  harness.manager.stop();
+});
+
+test("failed downloads remain retryable without opening an unverified file", async () => {
+  const harness = createHarness();
+  let attempts = 0;
+  harness.releaseClient.downloadRelease = async () => {
+    attempts += 1;
+    if (attempts === 1) throw new Error("checksum mismatch");
+    return "/synthetic-downloads/Chelaro-0.3.0-arm64.dmg";
+  };
+  await harness.invoke(UPDATE_CHANNELS.check);
 
   await harness.invoke(UPDATE_CHANNELS.download);
   assert.deepEqual(harness.manager.getState(), {
-    status: "downloading",
-    version: "0.2.1",
-    percent: 0,
+    status: "error",
+    stage: "download",
+    version: "0.3.0",
   });
-
-  harness.updater.emit("update-downloaded", { version: "0.2.1" });
-  assert.equal(harness.sent.at(-1).channel, UPDATE_CHANNELS.stateChanged);
-  harness.manager.stop();
-});
-
-test("install stops local services before handing off to the updater", async () => {
-  const harness = createHarness();
-  let installed = false;
-  harness.updater.quitAndInstall = () => {
-    assert.equal(harness.servicesStopped(), true);
-    installed = true;
-  };
-  harness.updater.emit("update-downloaded", { version: "0.2.1" });
-
-  await harness.invoke(UPDATE_CHANNELS.install);
-
-  assert.equal(installed, true);
-  harness.manager.stop();
-});
-
-test("failed downloads return the updater to a safe hidden state", async () => {
-  const harness = createHarness();
-  harness.updater.downloadUpdate = async () => {
-    throw new Error("download unavailable");
-  };
-  harness.updater.emit("update-available", { version: "0.2.1" });
+  await harness.invoke(UPDATE_CHANNELS.openInstaller);
+  assert.deepEqual(harness.openedInstallers, []);
 
   await harness.invoke(UPDATE_CHANNELS.download);
-
-  assert.deepEqual(harness.manager.getState(), { status: "error" });
+  assert.equal(attempts, 2);
+  assert.equal(harness.manager.getState().status, "downloaded");
   harness.manager.stop();
 });
 
-test("update IPC rejects requests from another renderer", async () => {
-  const harness = createHarness();
-  const getState = new Map();
-  const updater = new EventEmitter();
-  const ipcMain = {
-    handle: (channel, handler) => getState.set(channel, handler),
-    removeHandler: () => {},
-  };
-  createUpdateManager({
-    updater,
-    ipcMain,
-    getWindow: () => ({ isDestroyed: () => false, webContents: {} }),
-    isEnabled: false,
-    stopServices: async () => {},
-  });
-
+test("disabled updates stay inert and update IPC rejects another renderer", async () => {
+  const harness = createHarness({ enabled: false });
+  assert.deepEqual(await harness.invoke(UPDATE_CHANNELS.check), { status: "disabled" });
   assert.throws(
-    () => getState.get(UPDATE_CHANNELS.getState)({ sender: {} }),
+    () => harness.invoke(UPDATE_CHANNELS.getState, {}),
     /Untrusted update request/,
   );
   harness.manager.stop();
