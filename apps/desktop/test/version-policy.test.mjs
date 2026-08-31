@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertProductVersionBump } from "../../../scripts/check-version-bump.mjs";
+import {
+  assertProductVersionBump,
+  baseReferenceFromArguments,
+} from "../../../scripts/check-version-bump.mjs";
 
 const versions = (version) => ({
   desktop: version,
@@ -33,4 +36,11 @@ test("version policy rejects unchanged, lower, malformed, and unsynchronized ver
     { desktop: "0.2.0", root: "0.2.0", web: "0.1.9" },
     versions("0.2.1"),
   ));
+});
+
+test("version policy accepts direct and pnpm-separated base references", () => {
+  assert.equal(baseReferenceFromArguments(["main"]), "main");
+  assert.equal(baseReferenceFromArguments(["--", "origin/main"]), "origin/main");
+  assert.throws(() => baseReferenceFromArguments(["--"]));
+  assert.throws(() => baseReferenceFromArguments(["main", "extra"]));
 });

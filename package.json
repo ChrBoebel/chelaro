@@ -1,6 +1,6 @@
 {
   "name": "finance-os",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "packageManager": "pnpm@10.32.1",
   "engines": {
@@ -13,6 +13,7 @@
     "build:agent-storage": "pnpm --filter @finance-os/agent-storage build",
     "bootstrap:agent-tools": "node scripts/install-agent-tools.mjs",
     "check:safety": "bash scripts/check-repository-safety.sh",
+    "check:version-bump": "node scripts/check-version-bump.mjs",
     "dev:api": "uv run --project apps/api uvicorn finance_os_api.main:app --app-dir apps/api/src --reload --host 127.0.0.1 --port 8000",
     "dev:desktop": "pnpm --filter desktop dev",
     "dev:web": "pnpm --filter web dev",

@@ -17,6 +17,7 @@
 - [ ] `pnpm infra:config` passes when infrastructure changed
 - [ ] No real invoices, bank exports, credentials, or production data are included
 - [ ] Sichtbare Änderungen enthalten passende Release- oder Dokumentationshinweise
+- [ ] The synchronized product version is higher than `main` and has matching release notes
 - [ ] Ich bin zur Einreichung berechtigt und akzeptiere die Beitragsbedingungen in `CONTRIBUTING.md`
 
 ## Finanzsicherheit
