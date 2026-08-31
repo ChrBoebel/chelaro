@@ -35,4 +35,5 @@ module.exports = {
     sign: false,
   },
   artifactName: "Chelaro-${version}-${arch}.${ext}",
+  afterPack: require("./scripts/adhoc-sign-macos.cjs"),
 };
