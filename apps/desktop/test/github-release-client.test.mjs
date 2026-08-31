@@ -12,6 +12,11 @@ import {
 
 const payload = Buffer.from("synthetic Chelaro installer");
 const checksum = createHash("sha256").update(payload).digest("hex");
+const noopQuarantineMarker = async () => {};
+
+function createClient(options = {}) {
+  return createGitHubReleaseClient({ markQuarantined: noopQuarantineMarker, ...options });
+}
 
 function releaseResponse({ version = "0.3.0", assets = releaseAssets(version) } = {}) {
   return jsonResponse({
@@ -43,7 +48,7 @@ function jsonResponse(value) {
 }
 
 test("stable GitHub releases are announced only when their version is newer", async () => {
-  const client = createGitHubReleaseClient({ fetchImpl: async () => releaseResponse() });
+  const client = createClient({ fetchImpl: async () => releaseResponse() });
 
   assert.equal((await client.getLatestRelease("0.2.2")).version, "0.3.0");
   assert.equal(await client.getLatestRelease("0.3.0"), null);
@@ -51,14 +56,14 @@ test("stable GitHub releases are announced only when their version is newer", as
 });
 
 test("release discovery rejects prereleases and unexpected asset URLs", async () => {
-  const prereleaseClient = createGitHubReleaseClient({
+  const prereleaseClient = createClient({
     fetchImpl: async () => jsonResponse({ prerelease: true, draft: false }),
   });
   await assert.rejects(() => prereleaseClient.getLatestRelease("0.2.2"), /stable Chelaro release/);
 
   const assets = releaseAssets("0.3.0");
   assets[0].browser_download_url = "https://example.com/Chelaro-0.3.0-arm64.dmg";
-  const untrustedClient = createGitHubReleaseClient({
+  const untrustedClient = createClient({
     fetchImpl: async () => releaseResponse({ assets }),
   });
   await assert.rejects(() => untrustedClient.getLatestRelease("0.2.2"), /not trusted/);
@@ -71,7 +76,11 @@ test("DMG downloads are kept only after their published checksum and size match"
     new Response(`${checksum}  Chelaro-0.3.0-arm64.dmg\n`),
     new Response(payload),
   ];
-  const client = createGitHubReleaseClient({ fetchImpl: async () => responses.shift() });
+  const quarantinedPaths = [];
+  const client = createClient({
+    fetchImpl: async () => responses.shift(),
+    markQuarantined: async (filePath) => quarantinedPaths.push(filePath),
+  });
   const release = await client.getLatestRelease("0.2.2");
   const progress = [];
 
@@ -81,6 +90,8 @@ test("DMG downloads are kept only after their published checksum and size match"
 
   assert.equal(installerPath, path.join(destination, "Chelaro-0.3.0-arm64.dmg"));
   assert.deepEqual(await readFile(installerPath), payload);
+  assert.equal(quarantinedPaths.length, 1);
+  assert.match(quarantinedPaths[0], /\.chelaro-update-/u);
   assert.equal(progress.at(-1), 100);
 });
 
@@ -92,7 +103,7 @@ test("a corrupt DMG is rejected and its partial download is removed", async () =
     new Response(`${checksum}  Chelaro-0.3.0-arm64.dmg\n`),
     new Response(corruptPayload),
   ];
-  const client = createGitHubReleaseClient({ fetchImpl: async () => responses.shift() });
+  const client = createClient({ fetchImpl: async () => responses.shift() });
   const release = await client.getLatestRelease("0.2.2");
 
   await assert.rejects(
@@ -115,7 +126,7 @@ test("an existing downloaded DMG is never overwritten", async () => {
     new Response(`${checksum}  Chelaro-0.3.0-arm64.dmg\n`),
     new Response(payload),
   ];
-  const client = createGitHubReleaseClient({ fetchImpl: async () => responses.shift() });
+  const client = createClient({ fetchImpl: async () => responses.shift() });
   const release = await client.getLatestRelease("0.2.2");
 
   const installerPath = await client.downloadRelease(release, destination);
@@ -123,4 +134,23 @@ test("an existing downloaded DMG is never overwritten", async () => {
   assert.equal(installerPath, path.join(destination, "Chelaro-0.3.0-arm64 (1).dmg"));
   assert.equal(await readFile(existingPath, "utf8"), "existing user download");
   assert.deepEqual(await readFile(installerPath), payload);
+});
+
+test("a DMG is discarded when its macOS quarantine marker cannot be applied", async () => {
+  const destination = await mkdtemp(path.join(os.tmpdir(), "chelaro-update-test-"));
+  const responses = [
+    releaseResponse(),
+    new Response(`${checksum}  Chelaro-0.3.0-arm64.dmg\n`),
+    new Response(payload),
+  ];
+  const client = createClient({
+    fetchImpl: async () => responses.shift(),
+    markQuarantined: async () => {
+      throw new Error("xattr failed");
+    },
+  });
+  const release = await client.getLatestRelease("0.2.2");
+
+  await assert.rejects(() => client.downloadRelease(release, destination), /xattr failed/);
+  assert.deepEqual(await readdir(destination), []);
 });
