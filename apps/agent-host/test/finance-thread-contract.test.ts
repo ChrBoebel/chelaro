@@ -33,9 +33,11 @@ test("finance thread has no environment and exactly the immutable finance namesp
   const params = buildFinanceThreadStartParams("gpt-5.6");
   assert.deepEqual(params.environments, []);
   assert.equal(params.dynamicTools, FINANCE_DYNAMIC_TOOLS);
+  assert.equal(params.dynamicTools.length, 8);
+  assert.equal(params.dynamicTools.every((tool) => tool.type === "function"), true);
   assert.equal(Object.isFrozen(params.dynamicTools), true);
   assert.equal(Object.isFrozen(params.dynamicTools[0]), true);
-  assert.equal(Object.isFrozen(params.dynamicTools[0]?.type === "namespace" ? params.dynamicTools[0].tools[0]?.inputSchema : null), true);
+  assert.equal(Object.isFrozen(params.dynamicTools[0]?.type === "function" ? params.dynamicTools[0].inputSchema : null), true);
   assert.equal(financeToolContractDigest(), FINANCE_TOOL_CONTRACT_DIGEST);
   assert.doesNotThrow(() => assertFinanceThreadStartParams(params));
 });
