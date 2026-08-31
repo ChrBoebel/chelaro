@@ -82,7 +82,30 @@ test("the update bootstrap uses one synchronized product version", async () => {
     JSON.parse(await readFile(file, "utf8"))
   ));
 
-  assert.deepEqual(packages.map(({ version }) => version), ["0.2.0", "0.2.0", "0.2.0"]);
+  assert.deepEqual(packages.map(({ version }) => version), ["0.2.1", "0.2.1", "0.2.1"]);
+});
+
+test("every pull request to main must increase the synchronized product version", async () => {
+  const [workflow, instructions, pullRequestTemplate, rootPackage] = await Promise.all([
+    readFile(path.join(repositoryRoot, ".github/workflows/ci.yml"), "utf8"),
+    readFile(path.join(repositoryRoot, "AGENTS.md"), "utf8"),
+    readFile(path.join(repositoryRoot, ".github/pull_request_template.md"), "utf8"),
+    readFile(path.join(repositoryRoot, "package.json"), "utf8").then(JSON.parse),
+  ]);
+
+  assert.equal(rootPackage.scripts["check:version-bump"], "node scripts/check-version-bump.mjs");
+  for (const required of [
+    "name: Version gate",
+    "fetch-depth: 0",
+    "pnpm check:version-bump -- \"$VERSION_BASE\"",
+    "github.event.pull_request.base.sha",
+    "github.event.before",
+  ]) {
+    assert.match(workflow, new RegExp(escapeRegex(required)));
+  }
+  assert.match(instructions, /Every pull request targeting `main` must increase/);
+  assert.match(instructions, /root, desktop, and web package versions synchronized/);
+  assert.match(pullRequestTemplate, /product version is higher than `main`/);
 });
 
 test("the GitHub channel has no legacy S3 publishing entry point", async () => {
