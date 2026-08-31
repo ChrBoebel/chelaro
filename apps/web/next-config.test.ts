@@ -1,23 +1,20 @@
+import fs from "node:fs";
 import path from "node:path";
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
 
 import nextConfig from "./next.config";
 
 describe("standalone output tracing", () => {
-  test("includes the exact helper target without scanning pnpm's shared store", () => {
-    const require = createRequire(import.meta.url);
-    const projectDirectory = path.dirname(fileURLToPath(import.meta.url));
-    const helpersDirectory = path.dirname(require.resolve("@swc/helpers/package.json"));
-    const expectedEsmGlob = `${path
-      .relative(projectDirectory, path.join(helpersDirectory, "esm"))
-      .split(path.sep)
-      .join("/")}/**/*`;
-    const includes = nextConfig.outputFileTracingIncludes?.["/*"];
+  test("does not trace helpers through pnpm's shared store", () => {
+    expect(nextConfig.outputFileTracingIncludes).toBeUndefined();
+  });
 
-    expect(includes).toEqual([expectedEsmGlob]);
-    expect(expectedEsmGlob.slice(0, expectedEsmGlob.indexOf("/esm/"))).not.toContain("*");
+  test("completes the standalone helper target after Next builds", () => {
+    const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8"));
+
+    expect(packageJson.scripts.build).toBe(
+      "next build && node ../../scripts/complete-standalone-web.mjs",
+    );
   });
 });
