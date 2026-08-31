@@ -94,6 +94,7 @@ async function bootstrap() {
       : await startFinanceServices(processManager, {
           agentDataRoot: path.join(app.getPath("userData"), "finance-assistant"),
           userHome: app.getPath("home"),
+          ...(financeAssistantE2e ? await allocateE2ePorts() : {}),
           ...(financeAssistantE2e
             ? {
                 prepareDatabase: false,
@@ -144,6 +145,13 @@ async function bootstrap() {
     });
     app.quit();
   }
+}
+
+async function allocateE2ePorts() {
+  const apiPort = await findAvailablePort();
+  let webPort = await findAvailablePort();
+  while (webPort === apiPort) webPort = await findAvailablePort();
+  return { apiPort, webPort };
 }
 
 function validatedE2eDataRoot(value) {

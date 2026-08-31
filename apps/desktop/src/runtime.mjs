@@ -22,9 +22,12 @@ export function isAllowedNavigation(target, appOrigin) {
   }
 }
 
-export async function isFinanceApiAvailable(fetchImplementation = fetch) {
+export async function isFinanceApiAvailable(
+  fetchImplementation = fetch,
+  healthUrl = API_HEALTH_URL,
+) {
   try {
-    const response = await fetchImplementation(API_HEALTH_URL, {
+    const response = await fetchImplementation(healthUrl, {
       cache: "no-store",
       signal: AbortSignal.timeout(1_500),
     });
@@ -36,9 +39,12 @@ export async function isFinanceApiAvailable(fetchImplementation = fetch) {
   }
 }
 
-export async function isFinanceApiReady(fetchImplementation = fetch) {
+export async function isFinanceApiReady(
+  fetchImplementation = fetch,
+  readyUrl = API_READY_URL,
+) {
   try {
-    const response = await fetchImplementation(API_READY_URL, {
+    const response = await fetchImplementation(readyUrl, {
       cache: "no-store",
       signal: AbortSignal.timeout(1_500),
     });
@@ -50,9 +56,9 @@ export async function isFinanceApiReady(fetchImplementation = fetch) {
   }
 }
 
-export async function isFinanceWebAvailable(fetchImplementation = fetch) {
+export async function isFinanceWebAvailable(fetchImplementation = fetch, webUrl = WEB_URL) {
   try {
-    const response = await fetchImplementation(WEB_URL, {
+    const response = await fetchImplementation(webUrl, {
       cache: "no-store",
       signal: AbortSignal.timeout(1_500),
     });
@@ -213,14 +219,18 @@ export async function startFinanceServices(
   {
     agentDataRoot,
     agentHostEntryPath,
+    apiPort = 8000,
     environment = process.env,
     prepareDatabase = true,
     userHome = environment.HOME,
+    webPort = 3000,
   } = {},
 ) {
-  const apiWasRunning = await isFinanceApiAvailable();
-  const apiWasReady = apiWasRunning && (await isFinanceApiReady());
-  const webWasRunning = await isFinanceWebAvailable();
+  const apiUrl = `http://127.0.0.1:${apiPort}`;
+  const webUrl = `http://127.0.0.1:${webPort}`;
+  const apiWasRunning = await isFinanceApiAvailable(fetch, `${apiUrl}/health`);
+  const apiWasReady = apiWasRunning && (await isFinanceApiReady(fetch, `${apiUrl}/ready`));
+  const webWasRunning = await isFinanceWebAvailable(fetch, webUrl);
   const credentials = apiWasRunning
     ? existingSourceCredentials(environment)
     : createSourceCredentials();
@@ -231,11 +241,33 @@ export async function startFinanceServices(
       await processManager.run("Datenbank-Migrationen anwenden", ["migrate:api"]);
     }
     if (!apiWasRunning) {
-      processManager.startExecutable("Chelaro API", pnpmExecutable(), ["start:api"], {
-        env: apiEnvironment(environment, credentials),
-      });
+      const apiEnv = apiEnvironment(environment, credentials);
+      if (apiPort === 8000) {
+        processManager.startExecutable("Chelaro API", pnpmExecutable(), ["start:api"], {
+          env: apiEnv,
+        });
+      } else {
+        processManager.startExecutable(
+          "Chelaro API",
+          "uv",
+          [
+            "run",
+            "--project",
+            "apps/api",
+            "uvicorn",
+            "finance_os_api.main:app",
+            "--app-dir",
+            "apps/api/src",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            String(apiPort),
+          ],
+          { env: { ...apiEnv, FINANCE_OS_API_PORT: String(apiPort) } },
+        );
+      }
     }
-    await waitForUrl(API_READY_URL, {
+    await waitForUrl(`${apiUrl}/ready`, {
       validate: async (response) => {
         if (!response.ok) return false;
         const body = await response.json();
@@ -252,7 +284,7 @@ export async function startFinanceServices(
         agentDataRoot,
         environment,
         financeApiToken: credentials.financeAssistantToken,
-        financeApiUrl: "http://127.0.0.1:8000/",
+        financeApiUrl: `${apiUrl}/`,
         hostEntryPath: agentHostEntryPath,
         userHome,
       });
@@ -266,10 +298,19 @@ export async function startFinanceServices(
 
   if (!webWasRunning) {
     await processManager.run("Web-Oberfläche bauen", ["build:web"]);
-    processManager.startExecutable("Chelaro Web", pnpmExecutable(), ["start:web"], {
-      env: webEnvironment(environment, credentials?.ownerToken, assistant),
-    });
-    await waitForUrl(WEB_URL, {
+    processManager.startExecutable(
+      "Chelaro Web",
+      pnpmExecutable(),
+      ["--filter", "web", "start", "--port", String(webPort)],
+      {
+        env: {
+          ...webEnvironment(environment, credentials?.ownerToken, assistant),
+          FINANCE_OS_API_URL: apiUrl,
+          FINANCE_OS_WEB_ORIGIN: webUrl,
+        },
+      },
+    );
+    await waitForUrl(webUrl, {
       validate: async (response) => response.ok && (await response.text()).includes("Chelaro"),
     });
   }
@@ -278,7 +319,7 @@ export async function startFinanceServices(
     apiWasRunning,
     assistantAvailable: Boolean(assistant),
     webWasRunning,
-    webUrl: WEB_URL,
+    webUrl,
   };
 }
 

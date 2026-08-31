@@ -22,7 +22,7 @@ export async function runFinanceAssistantE2e(window, { dataRoot }) {
     await clickButton(window, "Assistent");
     await waitForText(window, "Du entscheidest, was geteilt wird.");
     await clickButton(window, "Zustimmen und fortfahren");
-    await waitForText(window, "Neue Unterhaltung");
+    await waitForButton(window, "Neue Unterhaltung");
     await clickButton(window, "Neue Unterhaltung");
     await waitForText(window, "Wobei darf ich dir helfen?");
 
@@ -39,6 +39,20 @@ export async function runFinanceAssistantE2e(window, { dataRoot }) {
     `, true);
     if (!submitted) throw new Error("Finance assistant prompt could not be submitted.");
     await waitForButton(window, "Senden");
+    const persistedConversation = await readPersistedConversation(window);
+    if (
+      persistedConversation.conversations.length !== 1 ||
+      persistedConversation.messages.length !== 2 ||
+      persistedConversation.messages[0]?.role !== "user" ||
+      persistedConversation.messages[1]?.role !== "assistant" ||
+      !persistedConversation.messages[1]?.text.includes("prüfbaren Vorschlag")
+    ) {
+      throw new Error("The complete finance conversation was not stored locally.");
+    }
+    window.webContents.reload();
+    await waitForButton(window, "Assistent");
+    await clickButton(window, "Assistent");
+    await waitForText(window, "prüfbaren Vorschlag vorbereitet");
 
     const beforeApproval = await window.webContents.executeJavaScript(`
       (async () => {
@@ -113,6 +127,8 @@ export async function runFinanceAssistantE2e(window, { dataRoot }) {
     await writeFile(screenshotPath, image.toPNG(), { mode: 0o600 });
     const result = {
       assistantAnswerStreamed: true,
+      completeConversationPersisted: true,
+      conversationVisibleAfterRendererRestart: true,
       canonicalDataUnchangedBeforeApproval: true,
       consentCompleted: true,
       directFinanceToolCallCreatedProposal: true,
@@ -139,6 +155,27 @@ export async function runFinanceAssistantE2e(window, { dataRoot }) {
     await writeFile(resultPath, `${JSON.stringify(result, null, 2)}\n`, { mode: 0o600 });
     throw error;
   }
+}
+
+async function readPersistedConversation(window) {
+  return window.webContents.executeJavaScript(`
+    (async () => {
+      const conversationsResponse = await fetch("/api/assistant/conversations", {
+        cache: "no-store"
+      });
+      const conversations = await conversationsResponse.json();
+      if (!conversationsResponse.ok || conversations.data.length !== 1) {
+        throw new Error("Conversation list could not be loaded.");
+      }
+      const messagesResponse = await fetch(
+        "/api/assistant/conversations/" + encodeURIComponent(conversations.data[0].id) + "/messages",
+        { cache: "no-store" }
+      );
+      const messages = await messagesResponse.json();
+      if (!messagesResponse.ok) throw new Error("Conversation messages could not be loaded.");
+      return { conversations: conversations.data, messages: messages.data };
+    })()
+  `, true);
 }
 
 async function clickButton(window, label) {
