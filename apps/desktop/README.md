@@ -1,9 +1,8 @@
 # Chelaro Desktop
 
 Die Electron-Shell enthält die lokale API-, Web- und Finance-Agent-Host-Runtime, verwaltet deren
-Prozesse und stellt den expliziten macOS-Updateablauf bereit. Paketierte Builds enthalten dauerhaft
-den öffentlichen GitHub-Releases-Provider. Die Source Preview bietet noch keine signierten
-Downloads, solange Developer-ID-Signierung und Apple-Notarisierung nicht eingerichtet sind.
+Prozesse und stellt den expliziten kostenlosen macOS-Updateablauf bereit. Paketierte Builds prüfen
+den festen öffentlichen GitHub-Releases-Kanal ohne Client-Token.
 
 ## Entwickeln und paketieren
 
@@ -15,25 +14,30 @@ pnpm package:desktop:dir
 pnpm package:desktop
 ```
 
-Lokale Pakete sind absichtlich unsigniert und ausschließlich für Entwicklungstests gedacht. Sie
-enthalten zwar `app-update.yml`, sind aber keine freigegebenen Updateartefakte. Nur der geschützte
-Tag-Workflow darf signierte DMG-, ZIP-, Blockmap- und `latest-mac.yml`-Dateien veröffentlichen.
+Lokale und veröffentlichte Pakete sind absichtlich nicht mit einer Apple Developer ID signiert.
+Nur der geschützte Tag-Workflow darf eine DMG zusammen mit `SHA256SUMS.txt` veröffentlichen. Das
+ist ein manueller Download- und Installationskanal, kein Squirrel- oder `electron-updater`-Kanal.
 Der eingebettete API-Helfer verwendet den PyInstaller-Konsolen-Bootloader und läuft als
 Hintergrundprozess, ohne als zweite Anwendung im macOS Dock zu erscheinen.
 
-## Update-Bootstrap
+## Updateablauf
 
-- `0.1.0` besitzt keine eingebettete Updatekonfiguration und benötigt einmalig eine manuelle,
-  signierte `0.2.0`-Installation.
-- Ab `0.2.0` prüft Chelaro den stabilen öffentlichen GitHub Release ohne Client-Token.
-- Download und Installation starten nur nach einer ausdrücklichen Nutzeraktion.
+- Bestehende `0.2.x`-Apps benötigen einmalig die manuelle `0.3.0`-Installation aus der GitHub-DMG.
+- Ab `0.3.0` prüft Chelaro den neuesten stabilen GitHub Release beim Start und alle sechs Stunden.
+- Nur die exakt erwartete `Chelaro-X.Y.Z-arm64.dmg` und `SHA256SUMS.txt` werden akzeptiert.
+- Chelaro prüft Größe und SHA-256-Prüfsumme, bevor es die DMG öffnen kann.
+- Download und Öffnen starten nur nach einer ausdrücklichen Nutzeraktion.
+- Der Nutzer zieht Chelaro selbst nach `Programme` und bestätigt das Ersetzen.
+- macOS kann für jede unsigned Version Rechtsklick → „Öffnen“ beziehungsweise „Dennoch öffnen“
+  verlangen.
 - Ein Update ersetzt das App-Bundle, nicht den bestehenden Datenpfad unter
   `~/Library/Application Support/Finance OS/`.
 
 ## Vertrauensgrenzen
 
 - Originaldokumente und bestehende App-Daten werden bei Updates nicht gelöscht.
-- Update-Download und Installation bleiben explizite Nutzeraktionen.
+- Update-Download, DMG-Öffnung und Installation bleiben explizite Nutzeraktionen.
+- Eine Prüfsumme schützt vor beschädigten Downloads, ersetzt aber keine Apple-Signatur.
 - Runtime-Capabilities werden beim Start frisch erzeugt und nicht in Environment-Dateien abgelegt.
 - Externe Links werden außerhalb des isolierten App-Fensters geöffnet.
 
@@ -44,8 +48,8 @@ pnpm quality:desktop
 pnpm release:check
 ```
 
-Die öffentliche Source Preview enthält das dokumentierte Chelaro-App-Icon und drei Screenshots mit
-synthetischen Daten, aber derzeit keine veröffentlichten Binärpakete. Screenshots werden über
+Die öffentliche Source Preview enthält das dokumentierte Chelaro-App-Icon, drei Screenshots mit
+synthetischen Daten und kann experimentelle unsigned DMGs veröffentlichen. Screenshots werden über
 `pnpm --filter desktop capture:docs` erzeugt; der Capture verlangt eine Loopback-URL und die
 ausdrückliche Bestätigung synthetischer Daten.
 

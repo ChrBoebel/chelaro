@@ -1,5 +1,8 @@
 # Automatic update proof release: TDD evidence
 
+> Historical `0.2.2` proof plan. Superseded before publication by the free manual GitHub update
+> flow in [`FREE_GITHUB_UPDATE_FLOW.md`](FREE_GITHUB_UPDATE_FLOW.md).
+
 Date: 2026-08-31
 
 ## User journeys

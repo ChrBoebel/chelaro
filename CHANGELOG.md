@@ -11,6 +11,31 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.3.0] - 2026-08-31
+
+### Added
+
+- A free GitHub Release check that announces higher stable Chelaro versions without client tokens.
+- An in-app manual update guide with download progress, release notes, retry states, macOS
+  Gatekeeper instructions, and a verified-DMG open action.
+- Exact DMG size and SHA-256 verification with rejection and cleanup of corrupt partial downloads.
+
+### Changed
+
+- The protected release workflow now publishes one unsigned Apple-Silicon DMG plus
+  `SHA256SUMS.txt` without Apple Developer Program credentials.
+- `0.3.0` becomes the one-time manual bootstrap required before later `0.3.x` releases can be
+  discovered through the new in-app flow.
+- Updates replace the application only through the user's explicit Finder action; Chelaro no longer
+  invokes the unsupported unsigned Squirrel in-place updater.
+
+### Security
+
+- Release discovery is restricted to the fixed Chelaro GitHub repository, stable Semantic Version
+  tags, exact versioned asset names, and trusted HTTPS download hosts.
+- Checksum verification is documented as corruption protection, not as Apple identity or
+  notarization.
+
 ## [0.2.2] - 2026-08-31
 
 Version `0.2.2` is the dedicated automatic-update proof candidate for a signed `0.2.1` baseline.

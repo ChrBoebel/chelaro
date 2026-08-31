@@ -1,5 +1,8 @@
 # Desktop auto-updates: TDD evidence
 
+> Historical `0.2.x` design record. Superseded by the free manual GitHub update flow in
+> [`FREE_GITHUB_UPDATE_FLOW.md`](FREE_GITHUB_UPDATE_FLOW.md) for `0.3.0`.
+
 Date: 2026-08-30
 
 ## Source and user journeys

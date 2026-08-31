@@ -43,10 +43,9 @@ if [[ -n "$requested_tag" ]] && ! grep -Eq "^## \[$desktop_version\] - [0-9]{4}-
   exit 1
 fi
 
-update_provider="$(node -p "require('./apps/desktop/electron-builder.config.cjs').publish?.[0]?.provider ?? ''")"
-update_owner="$(node -p "require('./apps/desktop/electron-builder.config.cjs').publish?.[0]?.owner ?? ''")"
-update_repository="$(node -p "require('./apps/desktop/electron-builder.config.cjs').publish?.[0]?.repo ?? ''")"
-if [[ "$update_provider" != "github" || "$update_owner" != "ChrBoebel" || "$update_repository" != "chelaro" ]]; then
+update_owner="$(node --input-type=module -e 'import { GITHUB_RELEASE_CHANNEL } from "./apps/desktop/src/github-release-client.mjs"; process.stdout.write(GITHUB_RELEASE_CHANNEL.owner)')"
+update_repository="$(node --input-type=module -e 'import { GITHUB_RELEASE_CHANNEL } from "./apps/desktop/src/github-release-client.mjs"; process.stdout.write(GITHUB_RELEASE_CHANNEL.repository)')"
+if [[ "$update_owner" != "ChrBoebel" || "$update_repository" != "chelaro" ]]; then
   echo "Desktop release must target the reviewed public GitHub update channel." >&2
   exit 1
 fi

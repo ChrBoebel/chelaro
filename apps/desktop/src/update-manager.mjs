@@ -1,7 +1,9 @@
 export const UPDATE_CHANNELS = Object.freeze({
   getState: "finance-os:update:get-state",
+  check: "finance-os:update:check",
   download: "finance-os:update:download",
-  install: "finance-os:update:install",
+  openInstaller: "finance-os:update:open-installer",
+  openReleasePage: "finance-os:update:open-release-page",
   stateChanged: "finance-os:update:state-changed",
 });
 
@@ -9,16 +11,21 @@ const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const INITIAL_CHECK_DELAY_MS = 10_000;
 
 export function createUpdateManager({
-  updater,
+  releaseClient,
   ipcMain,
   getWindow,
   isEnabled,
-  stopServices,
+  currentVersion,
+  downloadsDirectory,
+  openInstaller,
+  openReleasePage,
   logger = console,
   initialCheckDelayMs = INITIAL_CHECK_DELAY_MS,
   checkIntervalMs = CHECK_INTERVAL_MS,
 }) {
   let state = Object.freeze({ status: isEnabled ? "idle" : "disabled" });
+  let availableRelease;
+  let downloadedInstallerPath;
   let initialTimer;
   let intervalTimer;
 
@@ -41,68 +48,71 @@ export function createUpdateManager({
     assertTrustedSender(event);
     return state;
   });
+  ipcMain.handle(UPDATE_CHANNELS.check, async (event) => {
+    assertTrustedSender(event);
+    await check();
+    return state;
+  });
   ipcMain.handle(UPDATE_CHANNELS.download, async (event) => {
     assertTrustedSender(event);
-    if (!isEnabled || state.status !== "available") return state;
-    publish({ status: "downloading", version: state.version, percent: 0 });
+    const canRetry = state.status === "error" && state.stage === "download";
+    if (!isEnabled || !availableRelease || (state.status !== "available" && !canRetry)) return state;
+    publish({ status: "downloading", version: availableRelease.version, percent: 0 });
     try {
-      await updater.downloadUpdate();
+      downloadedInstallerPath = await releaseClient.downloadRelease(
+        availableRelease,
+        downloadsDirectory,
+        (percent) => publish({
+          status: "downloading",
+          version: availableRelease.version,
+          percent,
+        }),
+      );
+      publish({ status: "downloaded", version: availableRelease.version });
     } catch (error) {
       logger.error("[desktop] Update-Download fehlgeschlagen:", error);
-      publish({ status: "error" });
+      publish({ status: "error", stage: "download", version: availableRelease.version });
     }
     return state;
   });
-  ipcMain.handle(UPDATE_CHANNELS.install, async (event) => {
+  ipcMain.handle(UPDATE_CHANNELS.openInstaller, async (event) => {
     assertTrustedSender(event);
-    if (!isEnabled || state.status !== "downloaded") return state;
-    publish({ status: "installing", version: state.version });
+    const canRetry = state.status === "error" && state.stage === "open";
+    if (!isEnabled || !downloadedInstallerPath || (state.status !== "downloaded" && !canRetry)) {
+      return state;
+    }
     try {
-      await stopServices();
-      updater.quitAndInstall(false, true);
+      await openInstaller(downloadedInstallerPath);
     } catch (error) {
-      logger.error("[desktop] Update-Installation fehlgeschlagen:", error);
-      publish({ status: "error" });
+      logger.error("[desktop] Update-DMG konnte nicht geöffnet werden:", error);
+      publish({ status: "error", stage: "open", version: availableRelease.version });
     }
     return state;
   });
-
-  if (isEnabled) {
-    updater.autoDownload = false;
-    updater.autoInstallOnAppQuit = true;
-    updater.on("checking-for-update", () => publish({ status: "checking" }));
-    updater.on("update-available", (info) =>
-      publish({ status: "available", version: info.version }),
-    );
-    updater.on("update-not-available", () => publish({ status: "idle" }));
-    updater.on("download-progress", (progress) =>
-      publish({
-        status: "downloading",
-        version: state.version,
-        percent: Math.max(0, Math.min(100, Math.round(progress.percent))),
-      }),
-    );
-    updater.on("update-downloaded", (info) =>
-      publish({ status: "downloaded", version: info.version }),
-    );
-    updater.on("error", (error) => {
-      logger.error("[desktop] Update-Prüfung fehlgeschlagen:", error);
-      publish({ status: "error" });
-    });
-  }
+  ipcMain.handle(UPDATE_CHANNELS.openReleasePage, async (event) => {
+    assertTrustedSender(event);
+    if (!isEnabled || !availableRelease) return state;
+    await openReleasePage(availableRelease.pageUrl);
+    return state;
+  });
 
   const check = async () => {
-    if (!isEnabled || ["downloading", "downloaded", "installing"].includes(state.status)) return;
+    if (!isEnabled || ["downloading", "downloaded"].includes(state.status)) return;
+    publish({ status: "checking" });
     try {
-      await updater.checkForUpdates();
+      availableRelease = await releaseClient.getLatestRelease(currentVersion);
+      publish(availableRelease
+        ? { status: "available", version: availableRelease.version }
+        : { status: "idle" });
     } catch (error) {
       logger.error("[desktop] Update-Prüfung fehlgeschlagen:", error);
-      publish({ status: "error" });
+      publish({ status: "error", stage: "check" });
     }
   };
 
   return {
     getState: () => state,
+    check,
     start() {
       if (!isEnabled || initialTimer || intervalTimer) return;
       initialTimer = setTimeout(() => void check(), initialCheckDelayMs);
@@ -117,8 +127,10 @@ export function createUpdateManager({
       intervalTimer = undefined;
       for (const channel of [
         UPDATE_CHANNELS.getState,
+        UPDATE_CHANNELS.check,
         UPDATE_CHANNELS.download,
-        UPDATE_CHANNELS.install,
+        UPDATE_CHANNELS.openInstaller,
+        UPDATE_CHANNELS.openReleasePage,
       ]) {
         ipcMain.removeHandler(channel);
       }
