@@ -12,6 +12,7 @@ function desktopBridge(initialState: ChelaroUpdateState = { status: "idle" }) {
   let subscriber: ((state: ChelaroUpdateState) => void) | undefined;
   const bridge = {
     platform: "darwin",
+    runtime: { getVersion: vi.fn(async () => "0.3.6") },
     updates: {
       getState: vi.fn(async () => initialState),
       check: vi.fn(async () => initialState),

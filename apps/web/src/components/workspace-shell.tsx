@@ -6,6 +6,7 @@ import { BankConnectionSetup } from "@/components/bank-connection";
 import { BrandMark } from "@/components/brand-mark";
 import { DocumentInbox } from "@/components/document-inbox";
 import { DesktopUpdateButton } from "@/components/desktop-update-button";
+import { DesktopVersion } from "@/components/desktop-version";
 import { FinanceAssistant } from "@/components/finance-assistant";
 import { InvoiceWorkbook } from "@/components/invoice-workbook";
 import { PersonalDashboard } from "@/components/personal-dashboard";
@@ -26,7 +27,10 @@ export function WorkspaceShell() {
               <p className="text-sm font-semibold tracking-[-0.02em] text-ink">
                 Chelaro
               </p>
-              <p className="text-[11px] text-muted">Jede Zahl. Belegt.</p>
+              <div className="flex items-baseline gap-2 text-[11px] text-muted">
+                <p>Jede Zahl. Belegt.</p>
+                <DesktopVersion />
+              </div>
             </div>
           </div>
 

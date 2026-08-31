@@ -7,6 +7,9 @@ type ChelaroUpdateState =
 interface Window {
   financeOS?: {
     platform: string;
+    runtime: {
+      getVersion(): Promise<string>;
+    };
     updates: {
       getState(): Promise<ChelaroUpdateState>;
       check(): Promise<ChelaroUpdateState>;

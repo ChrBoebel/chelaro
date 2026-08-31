@@ -3,10 +3,11 @@ import path from "node:path";
 
 const E2E_TIMEOUT_MS = 30_000;
 
-export async function runUpdateFlowE2e(window, { dataRoot, evidence }) {
+export async function runUpdateFlowE2e(window, { applicationVersion, dataRoot, evidence }) {
   const resultPath = path.join(dataRoot, "desktop-update-e2e-result.json");
   const screenshotPath = path.join(dataRoot, "desktop-update-e2e.png");
   try {
+    await waitForText(window, `Version ${applicationVersion}`);
     await waitForButton(window, "Update 0.4.0");
     await clickButton(window, "Update 0.4.0");
     await waitForText(window, "Chelaro 0.4.0 ist verfügbar");
@@ -28,6 +29,7 @@ export async function runUpdateFlowE2e(window, { dataRoot, evidence }) {
     const image = await window.webContents.capturePage();
     await writeFile(screenshotPath, image.toPNG(), { mode: 0o600 });
     const result = {
+      installedVersionShown: applicationVersion,
       updateAnnounced: true,
       instructionsShown: true,
       verifiedDownloadCompleted: true,
