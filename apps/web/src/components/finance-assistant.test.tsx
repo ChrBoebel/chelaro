@@ -56,7 +56,7 @@ describe("FinanceAssistant", () => {
         return jsonResponse({
           snapshot: {
             ...baseSnapshot,
-            consent: { status: "granted", version: "2026-08-28.v1" },
+            consent: { status: "granted", version: "2026-08-31.v2" },
           },
         });
       }
@@ -82,7 +82,7 @@ describe("FinanceAssistant", () => {
   it("rechecks the installed Codex CLI instead of starting a separate login", async () => {
     const consented = {
       ...baseSnapshot,
-      consent: { status: "granted", version: "2026-08-28.v1" },
+      consent: { status: "granted", version: "2026-08-31.v2" },
     };
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
       if (String(input).endsWith("/provider/refresh")) {
@@ -100,7 +100,7 @@ describe("FinanceAssistant", () => {
     const unavailable = {
       ...baseSnapshot,
       appServer: "stopped",
-      consent: { status: "granted", version: "2026-08-28.v1" },
+      consent: { status: "granted", version: "2026-08-31.v2" },
       provider: { status: "not_found", version: null },
     };
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ snapshot: unavailable })));
@@ -114,8 +114,8 @@ describe("FinanceAssistant", () => {
     const authenticated = {
       ...baseSnapshot,
       auth: "authenticated",
-      consent: { status: "granted", version: "2026-08-28.v1" },
-      session: { id: sessionId, status: "ready" },
+      consent: { status: "granted", version: "2026-08-31.v2" },
+      session: { conversationId: null, id: sessionId, status: "ready" },
     };
     const running = {
       ...authenticated,
@@ -177,6 +177,130 @@ describe("FinanceAssistant", () => {
 
     expect(await screen.findByRole("heading", { name: "Finanzassistent nicht verfügbar." })).toBeDefined();
     expect(screen.getByText(/übrigen Finanzfunktionen bleiben vollständig nutzbar/)).toBeDefined();
+  });
+
+  it("shows complete local history even when the Codex host is unavailable", async () => {
+    const conversationId = "123e4567-e89b-42d3-a456-426614174000";
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/api/assistant/conversations")) {
+        return jsonResponse({
+          data: [{
+            id: conversationId,
+            message_count: 2,
+            status: "active",
+            title: "Gespeicherter Testchat",
+            updated_at: "2026-08-31T12:00:00Z",
+            version: 3,
+          }],
+        });
+      }
+      if (url.endsWith(`/conversations/${conversationId}/messages`)) {
+        return jsonResponse({
+          data: [
+            { id: "message-user", role: "user", status: "complete", text: "Lokale Frage" },
+            { id: "message-answer", role: "assistant", status: "complete", text: "Lokale Antwort" },
+          ],
+          next_before_sequence: null,
+        });
+      }
+      return jsonResponse({ error: { code: "assistant_unavailable" } }, 503);
+    }));
+
+    render(<FinanceAssistant />);
+
+    expect(await screen.findByText("Gespeicherter Testchat")).toBeDefined();
+    expect(await screen.findByText("Lokale Frage")).toBeDefined();
+    expect(screen.getByText("Lokale Antwort")).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Finanzassistent nicht verfügbar." })).toBeDefined();
+  });
+
+  it("keeps local history readable while the shared Codex account is logged out", async () => {
+    const conversationId = "123e4567-e89b-42d3-a456-426614174001";
+    const loggedOut = {
+      ...baseSnapshot,
+      consent: { status: "granted", version: "2026-08-31.v2" },
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/api/assistant/conversations")) {
+        return jsonResponse({
+          data: [{
+            id: conversationId,
+            message_count: 1,
+            status: "active",
+            title: "Offline lesbarer Testchat",
+            updated_at: "2026-08-31T12:00:00Z",
+            version: 2,
+          }],
+        });
+      }
+      if (url.endsWith(`/conversations/${conversationId}/messages`)) {
+        return jsonResponse({
+          data: [{
+            id: "message-offline",
+            role: "assistant",
+            status: "complete",
+            text: "Lokal gespeicherte Antwort",
+          }],
+          next_before_sequence: null,
+        });
+      }
+      return jsonResponse({ snapshot: loggedOut });
+    }));
+
+    render(<FinanceAssistant />);
+
+    expect(await screen.findByRole("heading", { name: "Codex-Anmeldung erforderlich" })).toBeDefined();
+    expect(await screen.findByText("Lokal gespeicherte Antwort")).toBeDefined();
+  });
+
+  it("continues a selected local conversation with its exact conversation id", async () => {
+    const conversationId = "123e4567-e89b-42d3-a456-426614174000";
+    const authenticated = {
+      ...baseSnapshot,
+      auth: "authenticated",
+      consent: { status: "granted", version: "2026-08-31.v2" },
+    };
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/api/assistant/conversations")) {
+        return jsonResponse({
+          data: [{
+            id: conversationId,
+            message_count: 1,
+            status: "active",
+            title: "Fortsetzbarer Testchat",
+            updated_at: "2026-08-31T12:00:00Z",
+            version: 2,
+          }],
+        });
+      }
+      if (url.endsWith(`/conversations/${conversationId}/messages`)) {
+        return jsonResponse({ data: [], next_before_sequence: null });
+      }
+      if (url.endsWith("/api/assistant/sessions")) {
+        return jsonResponse({
+          snapshot: {
+            ...authenticated,
+            session: { conversationId, id: "session_test", status: "ready" },
+          },
+        }, 201);
+      }
+      return jsonResponse({ snapshot: authenticated });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<FinanceAssistant />);
+    fireEvent.click(await screen.findByRole("button", { name: "Unterhaltung fortsetzen" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/assistant/sessions",
+      expect.objectContaining({
+        body: expect.stringContaining(`"conversation_id":"${conversationId}"`),
+        method: "POST",
+      }),
+    ));
   });
 });
 
