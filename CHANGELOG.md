@@ -11,6 +11,18 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.3.5] - 2026-08-31
+
+### Changed
+
+- Published a separately versioned stable target for the real in-app update journey from the
+  installed, fully ad-hoc signed `0.3.4` bootstrap.
+
+### Security
+
+- The target retains full-bundle ad-hoc signing, strict release verification, checksum validation,
+  macOS quarantine metadata, and explicit user-controlled installation.
+
 ## [0.3.4] - 2026-08-31
 
 ### Fixed
