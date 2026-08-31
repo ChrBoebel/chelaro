@@ -19,8 +19,11 @@ const ALLOWED_DOWNLOAD_HOSTS = new Set([
   "release-assets.githubusercontent.com",
 ]);
 
-export function createGitHubReleaseClient({ fetchImpl = globalThis.fetch } = {}) {
+export function createGitHubReleaseClient({ fetchImpl = globalThis.fetch, markQuarantined } = {}) {
   if (typeof fetchImpl !== "function") throw new Error("A fetch implementation is required.");
+  if (typeof markQuarantined !== "function") {
+    throw new Error("A macOS quarantine marker is required.");
+  }
 
   return {
     async getLatestRelease(currentVersion) {
@@ -65,6 +68,8 @@ export function createGitHubReleaseClient({ fetchImpl = globalThis.fetch } = {})
         if (hash.digest("hex") !== expectedChecksum) {
           throw new Error("The downloaded DMG checksum does not match SHA256SUMS.txt.");
         }
+
+        await markQuarantined(partialPath);
 
         const destinationPath = await linkWithoutOverwrite(
           partialPath,

@@ -11,6 +11,24 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.3.2] - 2026-08-31
+
+### Fixed
+
+- Verified update DMGs now receive an explicit macOS `com.apple.quarantine` attribute before they
+  become visible in Downloads, preserving the expected Gatekeeper boundary for Node-based downloads.
+- A failed quarantine operation removes the temporary DMG and prevents the app from opening it.
+
+### Changed
+
+- `0.3.2` replaces withdrawn `0.3.1` as the one-time manual bootstrap for the free update flow.
+- The separately versioned in-app update proof moves to `0.3.3`.
+
+### Security
+
+- The quarantine marker is applied with `/usr/bin/xattr` through a bounded argument array, never a
+  shell command, and only after byte-count and SHA-256 verification succeed.
+
 ## [0.3.1] - 2026-08-31
 
 ### Fixed
@@ -20,8 +38,8 @@ All notable Chelaro changes are recorded here. The format follows
 
 ### Changed
 
-- `0.3.1` is the one-time manual bootstrap required before `0.3.2` can exercise the new in-app
-  GitHub update journey.
+- `0.3.1` was withdrawn from the stable channel after real post-publication testing found that its
+  Node download did not preserve macOS quarantine metadata.
 
 ### Security
 

@@ -4,6 +4,7 @@ import { writeFile } from "node:fs/promises";
 
 import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from "electron";
 import { createGitHubReleaseClient } from "./github-release-client.mjs";
+import { createMacOsQuarantineMarker } from "./macos-quarantine.mjs";
 import { loadingPageUrl } from "./loading-page.mjs";
 import { runFinanceAssistantE2e } from "./finance-assistant-e2e.mjs";
 import { runUpdateFlowE2e } from "./update-flow-e2e.mjs";
@@ -214,7 +215,7 @@ if (!app.requestSingleInstanceLock()) {
     });
     const releaseClient = desktopUpdateE2e && e2eDataRoot
       ? createSyntheticUpdateE2eClient(e2eDataRoot)
-      : createGitHubReleaseClient();
+      : createGitHubReleaseClient({ markQuarantined: createMacOsQuarantineMarker() });
     updateManager = createUpdateManager({
       releaseClient,
       ipcMain,
