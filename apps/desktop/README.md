@@ -18,6 +18,8 @@ pnpm package:desktop
 Lokale Pakete sind absichtlich unsigniert und ausschließlich für Entwicklungstests gedacht. Sie
 enthalten zwar `app-update.yml`, sind aber keine freigegebenen Updateartefakte. Nur der geschützte
 Tag-Workflow darf signierte DMG-, ZIP-, Blockmap- und `latest-mac.yml`-Dateien veröffentlichen.
+Der eingebettete API-Helfer verwendet den PyInstaller-Konsolen-Bootloader und läuft als
+Hintergrundprozess, ohne als zweite Anwendung im macOS Dock zu erscheinen.
 
 ## Update-Bootstrap
 

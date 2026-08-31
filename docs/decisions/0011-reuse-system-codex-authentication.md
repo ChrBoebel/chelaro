@@ -31,9 +31,10 @@ existing credential store.
   `config/read`, extracts only bounded MCP server identifiers, and explicitly disables every one in
   the thread override. It does not expose or persist the configuration. This is required because an
   empty MCP table does not remove globally configured servers.
-- The finance thread still has no execution environment, read-only/no-network sandboxing, exact
-  feature disables, disabled inherited MCPs/skills, exactly eight dynamic finance tools, bounded
-  typed data, and proposal-only writes. Runtime responses and server requests remain validated.
+- The finance thread still has no execution environment, read-only/no-network sandboxing, disabled
+  inherited MCPs/skills, exactly eight dynamic finance functions, bounded typed data, and
+  proposal-only writes. ADR 0012 enables only the isolated Code Mode Host required by GPT-5.6 to
+  route calls to those functions; all runtime responses and server requests remain validated.
 - Source and packaged desktop modes use the same Agent Host boundary. The packaged app contains
   the Host and schemas, but not a Codex executable or credentials.
 
