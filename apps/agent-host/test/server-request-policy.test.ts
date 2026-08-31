@@ -178,7 +178,7 @@ test("contract: only dynamic finance calls are delegated", () => {
       threadId: "thread",
       turnId: "turn",
       callId: "call",
-      namespace: "chelaro_finance",
+      namespace: null,
       tool: "finance_get_overview",
       arguments: {},
     },

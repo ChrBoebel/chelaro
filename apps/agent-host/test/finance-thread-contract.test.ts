@@ -29,7 +29,7 @@ test("finance thread opts into only the required experimental API", () => {
   assert.throws(() => buildFinanceInitializeParams("development"), FinanceThreadContractError);
 });
 
-test("finance thread has no environment and exactly the immutable finance namespace", () => {
+test("finance thread has no environment and exactly eight immutable direct finance tools", () => {
   const params = buildFinanceThreadStartParams("gpt-5.6");
   assert.deepEqual(params.environments, []);
   assert.equal(params.dynamicTools, FINANCE_DYNAMIC_TOOLS);

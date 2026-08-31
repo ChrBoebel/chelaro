@@ -148,7 +148,7 @@ test("finance agent service: runs consent-bound chat and tool callbacks without 
     params: {
       arguments: { currency: "EUR", period: "2026-08" },
       callId: "call_1",
-      namespace: "chelaro_finance",
+      namespace: null,
       threadId: "provider_thread_1",
       tool: "finance_get_overview",
       turnId: "provider_turn_1",

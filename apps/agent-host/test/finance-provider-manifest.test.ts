@@ -129,19 +129,15 @@ test("provider edge: real App Server exposes exactly the eight finance tools", a
 });
 
 function expectedProviderTools(): unknown[] {
-  return FINANCE_DYNAMIC_TOOLS.map((namespace) => {
-    assert.equal(namespace.type, "namespace");
+  return FINANCE_DYNAMIC_TOOLS.map((tool) => {
+    assert.equal(tool.type, "function");
+    if (tool.type !== "function") assert.fail("Expected a directly callable finance function");
     return {
-      type: "namespace",
-      name: namespace.name,
-      description: namespace.description,
-      tools: namespace.tools.map((tool) => ({
-        type: "function",
-        name: tool.name,
-        description: tool.description,
-        strict: false,
-        parameters: providerSanitizedSchema(tool.inputSchema),
-      })).sort((left, right) => left.name.localeCompare(right.name)),
+      type: "function",
+      name: tool.name,
+      description: tool.description,
+      strict: false,
+      parameters: providerSanitizedSchema(tool.inputSchema),
     };
   });
 }

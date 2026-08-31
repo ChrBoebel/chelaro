@@ -34,7 +34,6 @@ import {
 } from "./finance-thread-contract.js";
 import {
   FINANCE_TOOL_NAMES,
-  FINANCE_TOOL_NAMESPACE,
 } from "./finance-tool-contract.js";
 import {
   FinanceToolDispatcher,
@@ -564,7 +563,7 @@ export class FinanceAgentServiceError extends Error {
 
 function assertFinanceToolItem(item: Extract<Parameters<typeof assertAllowedThreadItem>[0], { type: "dynamicToolCall" }>): void {
   if (
-    item.namespace !== FINANCE_TOOL_NAMESPACE ||
+    item.namespace !== null ||
     !FINANCE_TOOL_NAMES.includes(item.tool as (typeof FINANCE_TOOL_NAMES)[number])
   ) {
     throw new FinanceAgentServiceError("unsafe_codex_configuration");

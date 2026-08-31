@@ -264,7 +264,7 @@ function toolCallStream(): string {
     call_id: "finance_call_1",
     id: "fc_finance_1",
     name: "finance_get_overview",
-    namespace: "chelaro_finance",
+    namespace: null,
     status: "completed",
     type: "function_call",
   };
@@ -281,7 +281,7 @@ function proposalToolCallStream(callId: string, argumentsValue: Record<string, u
     call_id: callId,
     id: `fc_${callId}`,
     name: "finance_propose_receivable_create",
-    namespace: "chelaro_finance",
+    namespace: null,
     status: "completed",
     type: "function_call",
   };

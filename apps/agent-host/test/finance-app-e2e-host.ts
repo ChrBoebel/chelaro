@@ -74,7 +74,7 @@ class SyntheticFinanceProcess {
         rationale: "Der synthetische E2E-Dialog bittet ausdrücklich um eine neue prüfbare Forderung.",
       },
       callId: "call_propose_create",
-      namespace: "chelaro_finance",
+      namespace: null,
       threadId,
       tool: "finance_propose_receivable_create",
       turnId: providerTurnId,
