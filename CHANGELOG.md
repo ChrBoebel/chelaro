@@ -11,6 +11,29 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.2.2] - 2026-08-31
+
+Version `0.2.2` is the dedicated automatic-update proof candidate for a signed `0.2.1` baseline.
+Publication remains blocked until the five Apple signing and notarization secrets are configured.
+
+### Added
+
+- A separately versioned update target so the owner can verify discovery, download, installation,
+  restart, and local-data continuity from signed `0.2.1`.
+- A protected `macos-release` GitHub environment that requires owner approval and accepts only
+  version tags matching `v*`.
+
+### Fixed
+
+- Standalone web packaging now copies the required SWC ESM helpers through one bounded post-build
+  step, preventing pnpm workspace symlinks from recursively embedding prior desktop artifacts.
+
+### Security
+
+- `0.2.1` and `0.2.2` remain distinct immutable release commits and must pass the same Developer ID,
+  notarization, Gatekeeper, checksum, and complete-artifact gates.
+- No signing material is stored in source, local test artifacts, or release documentation.
+
 ## [0.2.1] - 2026-08-31
 
 Version `0.2.1` is the first signed update-bootstrap candidate. Publication remains blocked
