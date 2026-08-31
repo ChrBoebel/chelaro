@@ -37,7 +37,7 @@ Environment secrets:
 
 GitHub supplies the short-lived `GITHUB_TOKEN` used to create the Release. Do not add a personal
 access token, AWS credential, update URL, signing file, or certificate to the repository. At the
-time the `0.2.0` candidate was prepared, none of the five Apple secrets existed in GitHub.
+time the `0.2.1` candidate was prepared, the environment and all five Apple secrets were absent.
 
 ## Version preparation
 
@@ -50,6 +50,7 @@ time the `0.2.0` candidate was prepared, none of the five Apple secrets existed 
 5. Run:
 
 ```bash
+pnpm check:version-bump -- origin/main
 pnpm release:check
 pnpm quality
 pnpm quality:agent:macos
@@ -69,6 +70,11 @@ test -f apps/desktop/dist/Chelaro-X.Y.Z-arm64.zip.blockmap
 
 Local packages remain development artifacts. Only the GitHub workflow may create the signed,
 notarized release candidate.
+
+Every pull request into `main`, including documentation-only changes, must increase the synchronized
+stable product version. The `Version gate` CI job compares the branch against the pull request base
+commit, and the protected `main` branch requires that check before merge. A merge commit is checked
+again against its previous `main` commit on push.
 
 ## Tag and publish
 
@@ -109,6 +115,10 @@ For `0.2.0` only:
 4. verify `app-update.yml` exists in the installed bundle;
 5. verify Chelaro starts, reuses the system Codex login, and opens the existing local database.
 
+The baseline must carry a real Developer ID signature. An unsigned or ad-hoc-signed local package
+may contain `app-update.yml`, but macOS automatic updates require the running application itself to
+be signed and therefore cannot be proven from that package.
+
 For the first automatic-update proof, publish a signed `0.2.1` containing only a harmless visible
 release marker. From installed `0.2.0`:
 
@@ -147,6 +157,8 @@ directory as a rollback mechanism.
 ## Current blocker
 
 GitHub Actions and normal CI are operational. The remaining external blocker is the absence of the
-five Apple Developer ID and App Store Connect secrets listed above. Until they are configured and a
-tag workflow passes signature and notarization verification, `0.2.0` remains an unpublished
-bootstrap candidate and must not be represented as an available secure download.
+protected `macos-release` environment and the five Apple Developer ID and App Store Connect secrets
+listed above. The owner machine also has no valid code-signing identity; its installed `0.2.0` is
+ad-hoc signed and rejected by Gatekeeper. Until the credentials are configured and the tag workflow
+passes signature and notarization verification, neither that local package nor `0.2.1` may be
+represented as a secure automatic-update proof.

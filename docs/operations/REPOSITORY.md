@@ -1,6 +1,6 @@
 # Repository Operations
 
-Status target for the public Source Preview: 29 August 2026
+Status target for the public Source Preview: 31 August 2026
 
 ## Source of truth
 
@@ -31,10 +31,10 @@ code.
 | Issues | Enabled |
 | Projects | Disabled initially |
 | Discussions | Disabled initially |
-| Releases | None; the unpublished `0.2.0` update bootstrap is prepared on a feature branch |
+| Releases | None; the `0.2.1` signed automatic-update proof is prepared on a release branch |
 | Dependabot alerts | Use the capabilities available on the public repository |
 | Secret scanning | Use the capabilities available on the public repository |
-| Required branch rules | Not required initially; no paid-plan feature is assumed |
+| Required branch rules | `main` requires a pull request and the documented CI checks |
 
 ## Operational blockers
 
@@ -49,13 +49,17 @@ before signature, notarization, Gatekeeper, checksum, and update-bootstrap verif
 - `main` must remain deployable.
 - Branch from the current public `main`; do not develop against the archived private history.
 - Use focused Conventional Commits and squash merge.
+- Increase the synchronized stable product version in every pull request into `main`; the required
+  `Version gate` check enforces this against the pull request base commit.
+- Keep a matching dated changelog entry and release note for the new version.
 - A real test failure blocks merge.
 - An infrastructure-only check failure requires a documented complete local gate.
 - Database major versions, runtime majors, and compiler majors require a migration or compatibility
   plan instead of automatic merge.
 
-Repository rules may be evaluated later. They are not a prerequisite or implied guarantee of this
-Source Preview.
+The active repository rule for `main` prevents deletion and force pushes, requires the pull request
+path, and requires the `Version gate`, `Frontend`, `Backend`, and `Repository safety` checks before
+merge.
 
 ## Visual repository settings
 
