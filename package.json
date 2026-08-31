@@ -53,6 +53,7 @@
     "test:agent-storage": "pnpm --filter @finance-os/agent-storage test",
     "test:desktop": "pnpm --filter desktop test",
     "test:e2e:finance-assistant": "pnpm --filter desktop e2e:finance-assistant",
+    "test:e2e:update-flow": "pnpm --filter desktop e2e:update-flow",
     "test:web": "pnpm --filter web test"
   }
 }

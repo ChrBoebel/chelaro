@@ -112,6 +112,7 @@ export function createUpdateManager({
 
   return {
     getState: () => state,
+    check,
     start() {
       if (!isEnabled || initialTimer || intervalTimer) return;
       initialTimer = setTimeout(() => void check(), initialCheckDelayMs);

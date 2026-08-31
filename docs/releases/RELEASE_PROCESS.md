@@ -71,6 +71,7 @@ pnpm release:check
 pnpm quality
 pnpm quality:agent:macos
 pnpm test:e2e:finance-assistant
+pnpm test:e2e:update-flow
 pnpm infra:config
 ```
 

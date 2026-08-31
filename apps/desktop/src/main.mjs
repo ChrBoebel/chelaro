@@ -6,12 +6,15 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from "elect
 import { createGitHubReleaseClient } from "./github-release-client.mjs";
 import { loadingPageUrl } from "./loading-page.mjs";
 import { runFinanceAssistantE2e } from "./finance-assistant-e2e.mjs";
+import { runUpdateFlowE2e } from "./update-flow-e2e.mjs";
 import {
   WEB_URL,
   createProcessManager,
+  findAvailablePort,
   isAllowedNavigation,
   startFinanceServices,
   startPackagedFinanceServices,
+  waitForUrl,
 } from "./runtime.mjs";
 import { createUpdateManager } from "./update-manager.mjs";
 
@@ -21,7 +24,8 @@ const desktopIconPath = path.join(app.getAppPath(), "assets/icon.png");
 const preloadPath = path.join(currentDirectory, "preload.cjs");
 const processManager = createProcessManager({ repoRoot });
 const financeAssistantE2e = process.env.FINANCE_OS_E2E_SCENARIO === "finance-assistant";
-const e2eDataRoot = financeAssistantE2e
+const desktopUpdateE2e = !app.isPackaged && process.env.FINANCE_OS_E2E_SCENARIO === "desktop-update";
+const e2eDataRoot = financeAssistantE2e || desktopUpdateE2e
   ? validatedE2eDataRoot(process.env.FINANCE_OS_E2E_DATA_ROOT)
   : undefined;
 
@@ -39,6 +43,7 @@ let appOrigin;
 let shutdownComplete = false;
 let shutdownPromise;
 let updateManager;
+const updateE2eEvidence = { openedInstallerPath: undefined, openedReleasePage: undefined };
 
 function createMainWindow() {
   const window = new BrowserWindow({
@@ -76,7 +81,9 @@ async function bootstrap() {
   await mainWindow.loadURL(loadingPageUrl);
 
   try {
-    const services = app.isPackaged
+    const services = desktopUpdateE2e
+      ? await startDesktopUpdateE2eWeb()
+      : app.isPackaged
       ? await startPackagedFinanceServices(processManager, {
           resourcesPath: process.resourcesPath,
           userDataPath: app.getPath("userData"),
@@ -88,11 +95,15 @@ async function bootstrap() {
           userHome: app.getPath("home"),
           ...(financeAssistantE2e
             ? {
+                prepareDatabase: false,
+              }
+            : {}),
+          ...(financeAssistantE2e
+            ? {
                 agentHostEntryPath: path.join(
                   repoRoot,
                   "apps/agent-host/dist/test/finance-app-e2e-host.js",
                 ),
-                prepareDatabase: false,
               }
             : {}),
         });
@@ -105,10 +116,18 @@ async function bootstrap() {
       const result = await runFinanceAssistantE2e(mainWindow, { dataRoot: e2eDataRoot });
       console.info(`[desktop] Finance Assistant E2E bestanden: ${JSON.stringify(result)}`);
       app.quit();
+    } else if (desktopUpdateE2e && e2eDataRoot) {
+      await updateManager.check();
+      const result = await runUpdateFlowE2e(mainWindow, {
+        dataRoot: e2eDataRoot,
+        evidence: updateE2eEvidence,
+      });
+      console.info(`[desktop] Update Flow E2E bestanden: ${JSON.stringify(result)}`);
+      app.quit();
     }
   } catch (error) {
     console.error("[desktop] Start fehlgeschlagen:", error);
-    if (financeAssistantE2e) {
+    if (financeAssistantE2e || desktopUpdateE2e) {
       process.exitCode = 1;
       app.quit();
       return;
@@ -134,6 +153,23 @@ function validatedE2eDataRoot(value) {
     throw new Error("Finance Assistant E2E requires a dedicated temporary data root.");
   }
   return path.resolve(value);
+}
+
+async function startDesktopUpdateE2eWeb() {
+  const webPort = await findAvailablePort();
+  const webUrl = `http://127.0.0.1:${webPort}`;
+  await processManager.run("Update-E2E-Oberfläche bauen", ["build:web"]);
+  processManager.start("Update-E2E-Oberfläche", [
+    "--filter",
+    "web",
+    "start",
+    "--port",
+    String(webPort),
+  ]);
+  await waitForUrl(webUrl, {
+    validate: async (response) => response.ok && (await response.text()).includes("Chelaro"),
+  });
+  return { webUrl };
 }
 
 async function captureSmokeTestImage(window) {
@@ -176,18 +212,33 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
       callback(false);
     });
+    const releaseClient = desktopUpdateE2e && e2eDataRoot
+      ? createSyntheticUpdateE2eClient(e2eDataRoot)
+      : createGitHubReleaseClient();
     updateManager = createUpdateManager({
-      releaseClient: createGitHubReleaseClient(),
+      releaseClient,
       ipcMain,
       getWindow: () => mainWindow,
-      isEnabled: app.isPackaged && process.platform === "darwin",
+      isEnabled: (app.isPackaged && process.platform === "darwin") || desktopUpdateE2e,
       currentVersion: app.getVersion(),
-      downloadsDirectory: app.getPath("downloads"),
+      downloadsDirectory: desktopUpdateE2e && e2eDataRoot
+        ? e2eDataRoot
+        : app.getPath("downloads"),
       openInstaller: async (installerPath) => {
+        if (desktopUpdateE2e) {
+          updateE2eEvidence.openedInstallerPath = installerPath;
+          return;
+        }
         const errorMessage = await shell.openPath(installerPath);
         if (errorMessage) throw new Error(errorMessage);
       },
-      openReleasePage: (releasePageUrl) => shell.openExternal(releasePageUrl),
+      openReleasePage: async (releasePageUrl) => {
+        if (desktopUpdateE2e) {
+          updateE2eEvidence.openedReleasePage = releasePageUrl;
+          return;
+        }
+        await shell.openExternal(releasePageUrl);
+      },
     });
     await bootstrap();
   });
@@ -206,3 +257,21 @@ app.on("before-quit", (event) => {
 app.on("window-all-closed", () => {
   app.quit();
 });
+
+function createSyntheticUpdateE2eClient(dataRoot) {
+  const version = "0.4.0";
+  const pageUrl = `https://github.com/ChrBoebel/chelaro/releases/tag/v${version}`;
+  return {
+    getLatestRelease: async () => ({ version, pageUrl }),
+    downloadRelease: async (_release, destinationDirectory, onProgress) => {
+      onProgress(37);
+      const installerPath = path.join(destinationDirectory, `Chelaro-${version}-arm64.dmg`);
+      if (path.resolve(destinationDirectory) !== path.resolve(dataRoot)) {
+        throw new Error("Update E2E attempted to leave its temporary data root.");
+      }
+      await writeFile(installerPath, "synthetic verified DMG fixture", { mode: 0o600 });
+      onProgress(100);
+      return installerPath;
+    },
+  };
+}
