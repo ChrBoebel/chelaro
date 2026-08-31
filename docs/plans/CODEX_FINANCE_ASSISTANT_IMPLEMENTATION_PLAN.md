@@ -4,6 +4,8 @@
 > `CODEX_HOME`, bundled production CLI, source-only, and multi-PR delivery assumptions. The current
 > implementation reuses a compatible system Codex CLI and its existing login in both source and
 > packaged desktop modes.
+> ADR 0013 also supersedes the plan's exclusions and steps that required ephemeral chat messages
+> or ephemeral Codex threads; the finance authority and isolation boundaries remain.
 
 ## Goal
 

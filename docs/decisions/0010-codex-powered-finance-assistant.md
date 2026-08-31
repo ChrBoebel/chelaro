@@ -5,7 +5,7 @@
 Accepted for Phase 0 on 2026-08-28 after independent senior review. Later phases remain blocked
 until the Phase-0 gates in the reviewed implementation plan pass. Authentication, `CODEX_HOME`,
 and desktop runtime integration are superseded by ADR 0011. The Code Mode routing decision is
-amended by ADR 0012.
+amended by ADR 0012. Ephemeral chat retention is superseded by ADR 0013.
 
 ## Context
 
@@ -68,8 +68,8 @@ calls. It is a local control-plane dependency, not a financial system of record.
   proposal as an applied change.
 - The renderer talks through same-origin Next.js routes to a loopback-only, capability-token
   protected host gateway. The Electron main process owns startup, shutdown, and per-launch secrets.
-- Keep messages and provider threads ephemeral for V1. Chelaro persists only proposals and audit
-  records; closing the app or starting a new chat discards chat history.
+- The original V1 decision kept messages and provider threads ephemeral. ADR 0013 supersedes this
+  point with complete local message retention and resumable provider threads.
 - Correlate every tool request to the one active thread, turn, call ID, host epoch, and consent
   version. Proposal calls are exactly-once at the Host and persistently idempotent in the API.
 - Add append-only proposal lifecycle events for creation, approval, and rejection in the same
