@@ -72,7 +72,7 @@ test("desktop release publishes the complete macOS update set without AWS", asyn
   );
 });
 
-test("the update bootstrap uses one synchronized product version", async () => {
+test("the automatic-update proof uses one synchronized higher product version", async () => {
   const packageFiles = [
     path.join(repositoryRoot, "package.json"),
     path.join(desktopRoot, "package.json"),
@@ -82,7 +82,7 @@ test("the update bootstrap uses one synchronized product version", async () => {
     JSON.parse(await readFile(file, "utf8"))
   ));
 
-  assert.deepEqual(packages.map(({ version }) => version), ["0.2.1", "0.2.1", "0.2.1"]);
+  assert.deepEqual(packages.map(({ version }) => version), ["0.2.2", "0.2.2", "0.2.2"]);
 });
 
 test("every pull request to main must increase the synchronized product version", async () => {
