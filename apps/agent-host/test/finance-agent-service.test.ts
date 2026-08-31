@@ -47,6 +47,8 @@ class StubProcess {
         return { config: { mcp_servers: {} }, layers: null, origins: {} };
       case "thread/start":
         return safeThread(this.#runtimeDirectory);
+      case "thread/resume":
+        return safeThread(this.#runtimeDirectory);
       case "turn/start":
         if (this.earlyTurn) this.#emitCompletedTurn();
         return { turn: turn("provider_turn_1", "inProgress", []) };
@@ -54,6 +56,8 @@ class StubProcess {
         return {};
       case "thread/unsubscribe":
         return { status: "unsubscribed" };
+      case "thread/delete":
+        return {};
       default:
         throw new Error(`Unexpected synthetic method: ${method}`);
     }
@@ -94,10 +98,34 @@ class StubProcess {
 
 class StubApi implements FinanceToolApi {
   readonly calls: string[] = [];
+  readonly historyCalls: string[] = [];
+  providerThreadId: string | null = null;
 
   async call(name: Parameters<FinanceToolApi["call"]>[0]): Promise<JsonValue> {
     this.calls.push(name);
     return { currency: "EUR", period: "2026-08", total: "100.00" };
+  }
+
+  async bindConversationRuntime(_conversationId: string, providerThreadId: string): Promise<void> {
+    this.historyCalls.push("bind");
+    this.providerThreadId = providerThreadId;
+  }
+
+  async completeConversationTurn(): Promise<void> {
+    this.historyCalls.push("complete");
+  }
+
+  async failConversationTurn(): Promise<void> {
+    this.historyCalls.push("fail");
+  }
+
+  async getConversationRuntime(): Promise<string | null> {
+    this.historyCalls.push("runtime");
+    return this.providerThreadId;
+  }
+
+  async reserveConversationTurn(): Promise<void> {
+    this.historyCalls.push("reserve");
   }
 }
 
@@ -133,7 +161,7 @@ async function readyService(state: ReturnType<typeof fixture>): Promise<void> {
   await state.service.start();
   state.service.configureFinanceApi(state.api);
   await state.service.grantConsent();
-  await state.service.createSession("session_1");
+  await state.service.createSession("session_1", "123e4567-e89b-42d3-a456-426614174000");
 }
 
 test("finance agent service: runs consent-bound chat and tool callbacks without coding capabilities", async (t) => {
@@ -167,6 +195,7 @@ test("finance agent service: runs consent-bound chat and tool callbacks without 
       turnId: "provider_turn_1",
     },
   });
+
   state.process().notification({
     method: "item/completed",
     params: { completedAtMs: 2, item: message, threadId: "provider_thread_1", turnId: "provider_turn_1" },
@@ -175,9 +204,11 @@ test("finance agent service: runs consent-bound chat and tool callbacks without 
     method: "turn/completed",
     params: { threadId: "provider_thread_1", turn: turn("provider_turn_1", "completed", [message]) },
   });
+  await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(state.service.snapshot().turn?.status, "completed");
   assert.equal(state.events.some((event) => event.type === "assistant.message.completed"), true);
+  assert.deepEqual(state.api.historyCalls, ["runtime", "bind", "reserve", "complete"]);
   assert.equal(JSON.stringify(state.service.snapshot()).includes("provider_"), false);
   await state.service.closeSession("session_1");
   assert.equal(state.process().calls.at(-1)?.method, "thread/unsubscribe");
@@ -189,11 +220,32 @@ test("finance agent service: replays bounded early notifications only after turn
   await readyService(state);
   state.process().earlyTurn = true;
   await state.service.startTurn("session_1", "turn_1", "Zeige meinen Überblick");
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(state.service.snapshot().turn?.status, "completed");
   const bytes = state.events
     .filter((event) => event.type === "assistant.message.chunk")
     .map((event) => event.type === "assistant.message.chunk" ? Buffer.from(event.dataBase64, "base64") : Buffer.alloc(0));
   assert.equal(Buffer.concat(bytes).toString(), "Das ist dein Überblick.");
+});
+
+test("finance agent service: resumes the exact durable provider thread without fallback", async (t) => {
+  const state = fixture();
+  t.after(async () => { await state.service.stop(); state.cleanup(); });
+  state.api.providerThreadId = "provider_thread_1";
+  await state.service.start();
+  state.service.configureFinanceApi(state.api);
+  await state.service.grantConsent();
+  await state.service.createSession(
+    "session_1",
+    "123e4567-e89b-42d3-a456-426614174000",
+  );
+  const resumed = state.process().calls.find(({ method }) => method === "thread/resume");
+  assert.equal((resumed?.params as { threadId?: string }).threadId, "provider_thread_1");
+  assert.equal(state.process().calls.some(({ method }) => method === "thread/start"), false);
+  assert.deepEqual(state.api.historyCalls, ["runtime"]);
+  await state.service.closeSession("session_1");
+  await state.service.deleteConversation("123e4567-e89b-42d3-a456-426614174000");
+  assert.equal(state.process().calls.at(-1)?.method, "thread/delete");
 });
 
 test("finance agent service: durable revocation interrupts, closes, and stops before completion", async (t) => {
@@ -206,10 +258,10 @@ test("finance agent service: durable revocation interrupts, closes, and stops be
   assert.deepEqual(state.service.snapshot(), {
     appServer: "stopped",
     auth: "unknown",
-    consent: { status: "revoked", version: "2026-08-28.v1" },
+    consent: { status: "revoked", version: "2026-08-31.v2" },
     host: "ready",
     provider: { status: "ready", version: "test" },
-    session: { id: "session_1", status: "closed" },
+    session: { conversationId: null, id: "session_1", status: "closed" },
     turn: { id: "turn_1", status: "interrupted" },
   });
   assert.equal(state.process().stopped, true);
@@ -222,7 +274,7 @@ test("finance agent service: rejects sessions before post-start API injection", 
   await state.service.start();
   await state.service.grantConsent();
   await assert.rejects(
-    () => state.service.createSession("session_1"),
+    () => state.service.createSession("session_1", "123e4567-e89b-42d3-a456-426614174000"),
     (error: unknown) => error instanceof FinanceAgentServiceError && error.code === "finance_api_unavailable",
   );
   assert.equal(state.service.snapshot().session, null);
@@ -288,14 +340,14 @@ function safeThread(runtimeDirectory: string): Record<string, unknown> {
       cliVersion: "0.151.0",
       createdAt: 1,
       cwd: runtimeDirectory,
-      ephemeral: true,
+      ephemeral: false,
       forkedFromId: null,
       gitInfo: null,
       id: "provider_thread_1",
       modelProvider: "openai",
       name: null,
       parentThreadId: null,
-      path: null,
+      path: `${runtimeDirectory}/provider-thread.jsonl`,
       preview: "",
       projectId: null,
       recencyAt: 1,

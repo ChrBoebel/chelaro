@@ -9,7 +9,7 @@ import {
   type FinanceChatState,
 } from "../src/session-manager.js";
 
-const CONSENT_VERSION = "2026-08-28.v1";
+const CONSENT_VERSION = "2026-08-31.v2";
 
 function apply(state: FinanceChatState, ...events: FinanceChatEvent[]): FinanceChatState {
   return events.reduce(reduceFinanceChatState, state);

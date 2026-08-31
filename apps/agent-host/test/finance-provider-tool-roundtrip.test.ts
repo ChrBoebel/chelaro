@@ -73,7 +73,7 @@ test("provider edge: real App Server completes a finance tool round trip", async
     await rpc.request("initialize", buildFinanceInitializeParams("0.1.0"));
     const started = await rpc.request("thread/start", buildFinanceThreadStartParams()) as { thread: { id: string } };
     dispatcher.startSession({
-      consentVersion: "2026-08-28.v1",
+      consentVersion: "2026-08-31.v2",
       hostEpoch: "host_epoch_1",
       providerThreadId: started.thread.id,
       sessionId: "session_1",
@@ -177,7 +177,7 @@ test("provider edge: real App Server corrects invalid proposal arguments exactly
     await rpc.request("initialize", buildFinanceInitializeParams("0.1.0"));
     const started = await rpc.request("thread/start", buildFinanceThreadStartParams()) as { thread: { id: string } };
     dispatcher.startSession({
-      consentVersion: "2026-08-28.v1",
+      consentVersion: "2026-08-31.v2",
       hostEpoch: "host_epoch_1",
       providerThreadId: started.thread.id,
       sessionId: "session_1",

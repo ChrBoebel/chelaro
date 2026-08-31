@@ -38,6 +38,77 @@ test("calls bounded finance reads with the in-memory credential", async () => {
   await assert.rejects(() => client.call("finance_list_transactions", {}), FinanceApiClientError);
 });
 
+test("persists the exact conversation binding, prompt, and completed assistant text", async () => {
+  const conversationId = "423e4567-e89b-42d3-a456-426614174000";
+  const requests: Array<{ body: unknown; method?: string; url?: string }> = [];
+  const origin = await startServer((request, response) => {
+    const chunks: Buffer[] = [];
+    request.on("data", (chunk: Buffer) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = chunks.length > 0 ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      requests.push({
+        body,
+        ...(request.method === undefined ? {} : { method: request.method }),
+        ...(request.url === undefined ? {} : { url: request.url }),
+      });
+      response.writeHead(request.url?.endsWith("/runtime") && request.method === "GET" ? 200 : 201, {
+        "content-type": "application/json",
+      });
+      if (request.url?.endsWith("/runtime")) {
+        response.end(JSON.stringify({
+          data: {
+            conversation_id: conversationId,
+            provider_thread_id: request.method === "GET" ? null : "provider_thread_1",
+          },
+        }));
+      } else {
+        response.end(JSON.stringify({
+          data: { conversation_id: conversationId, status: "completed", turn_id: "turn_1" },
+        }));
+      }
+    });
+  });
+  const client = new FinanceApiClient({ baseUrl: origin });
+  client.setCredential(token);
+
+  assert.equal(await client.getConversationRuntime(conversationId), null);
+  await client.bindConversationRuntime(conversationId, "provider_thread_1");
+  await client.reserveConversationTurn(conversationId, "turn_1", "Synthetische Frage");
+  await client.completeConversationTurn(
+    conversationId,
+    "turn_1",
+    "provider_turn_1",
+    [{ message_id: "provider_message_1", sha256: "a".repeat(64), text: "Antwort" }],
+  );
+
+  assert.deepEqual(requests.map(({ method, url }) => ({ method, url })), [
+    {
+      method: "GET",
+      url: `/api/v1/finance-assistant/conversations/${conversationId}/runtime`,
+    },
+    {
+      method: "PUT",
+      url: `/api/v1/finance-assistant/conversations/${conversationId}/runtime`,
+    },
+    {
+      method: "POST",
+      url: `/api/v1/finance-assistant/conversations/${conversationId}/turns`,
+    },
+    {
+      method: "POST",
+      url: `/api/v1/finance-assistant/conversations/${conversationId}/turns/turn_1/complete`,
+    },
+  ]);
+  assert.deepEqual(requests.at(-1)?.body, {
+    messages: [{
+      message_id: "provider_message_1",
+      sha256: "a".repeat(64),
+      text: "Antwort",
+    }],
+    provider_turn_id: "provider_turn_1",
+  });
+});
+
 test("adds host correlation only to proposal requests", async () => {
   let received: unknown;
   const origin = await startServer((request, response) => {

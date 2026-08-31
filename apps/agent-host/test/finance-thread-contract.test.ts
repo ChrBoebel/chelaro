@@ -12,6 +12,7 @@ import {
   FinanceThreadContractError,
   assertFinanceThreadStartParams,
   buildFinanceInitializeParams,
+  buildFinanceThreadResumeParams,
   buildFinanceThreadStartParams,
   configuredMcpServerNames,
 } from "../src/finance-thread-contract.js";
@@ -41,6 +42,17 @@ test("finance thread has no environment and exactly eight immutable direct finan
   assert.equal(Object.isFrozen(params.dynamicTools[0]?.type === "function" ? params.dynamicTools[0].inputSchema : null), true);
   assert.equal(financeToolContractDigest(), FINANCE_TOOL_CONTRACT_DIGEST);
   assert.doesNotThrow(() => assertFinanceThreadStartParams(params));
+  assert.equal(params.ephemeral, false);
+});
+
+test("finance thread resume re-applies the restrictive contract without hydrating provider history", () => {
+  const params = buildFinanceThreadResumeParams("provider_thread_1", undefined, ["global_mcp"]);
+  assert.equal(params.threadId, "provider_thread_1");
+  assert.equal(params.excludeTurns, true);
+  assert.equal(params.approvalPolicy, "never");
+  assert.equal(params.sandbox, "read-only");
+  assert.deepEqual(params.config?.mcp_servers, { global_mcp: { enabled: false } });
+  assert.throws(() => buildFinanceThreadResumeParams("invalid thread"), FinanceThreadContractError);
 });
 
 test("finance thread enables only the isolated finance tool router and contains finance-only instructions", () => {
