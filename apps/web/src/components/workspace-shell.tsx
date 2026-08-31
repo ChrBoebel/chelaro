@@ -27,10 +27,7 @@ export function WorkspaceShell() {
               <p className="text-sm font-semibold tracking-[-0.02em] text-ink">
                 Chelaro
               </p>
-              <div className="flex items-baseline gap-2 text-[11px] text-muted">
-                <p>Jede Zahl. Belegt.</p>
-                <DesktopVersion />
-              </div>
+              <p className="text-[11px] text-muted">Jede Zahl. Belegt.</p>
             </div>
           </div>
 
@@ -87,6 +84,8 @@ export function WorkspaceShell() {
         ) : (
           <InvoiceWorkbook />
         )}
+
+        <DesktopVersion />
       </div>
     </main>
   );

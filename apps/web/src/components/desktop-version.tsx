@@ -25,5 +25,12 @@ export function DesktopVersion() {
 
   if (!version) return null;
 
-  return <p aria-label={`Installierte Version ${version}`}>Version {version}</p>;
+  return (
+    <footer
+      aria-label={`Installierte Version ${version}`}
+      className="mt-10 border-t border-line/60 py-4 text-center text-[10px] tracking-wide text-muted"
+    >
+      Chelaro · Version {version}
+    </footer>
+  );
 }

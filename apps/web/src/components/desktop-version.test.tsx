@@ -26,7 +26,9 @@ describe("DesktopVersion", () => {
     render(<DesktopVersion />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Installierte Version 0.3.6")).toBeTruthy();
+      const version = screen.getByLabelText("Installierte Version 0.3.6");
+      expect(version.tagName).toBe("FOOTER");
+      expect(version.textContent).toBe("Chelaro · Version 0.3.6");
     });
   });
 
