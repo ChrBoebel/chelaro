@@ -31,7 +31,7 @@ code.
 | Issues | Enabled |
 | Projects | Disabled initially |
 | Discussions | Disabled initially |
-| Releases | None; the signed `0.2.1` update bootstrap is prepared on a release branch |
+| Releases | None; signed `0.2.1` bootstrap and `0.2.2` update proof sources are prepared |
 | Dependabot alerts | Use the capabilities available on the public repository |
 | Secret scanning | Use the capabilities available on the public repository |
 | Required branch rules | `main` requires a pull request and the documented CI checks |
@@ -39,10 +39,10 @@ code.
 ## Operational blockers
 
 Normal GitHub CI is operational. The repository still publishes source code and documentation only;
-it does not yet publish a signed macOS application. The release workflow now targets public GitHub
-Releases directly, but remains blocked until the protected `macos-release` environment contains the
-required Developer ID and App Store Connect secrets. No tag or binary publication is permitted
-before signature, notarization, Gatekeeper, checksum, and update-bootstrap verification pass.
+it does not yet publish a signed macOS application. The protected `macos-release` environment
+exists, requires owner approval, and accepts only `v*` tags, but it contains none of the required
+Developer ID and App Store Connect secrets. No tag or binary publication is permitted before
+signature, notarization, Gatekeeper, checksum, and update-bootstrap verification pass.
 
 ## Merge policy
 

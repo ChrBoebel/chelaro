@@ -23,8 +23,9 @@ button. Verify this boundary with `0.2.2`; republishing `0.2.1` can never test v
 
 ## Required GitHub environment
 
-Create the protected environment `macos-release`. Restrict approvals to the repository owner and
-allow deployments only from reviewed release tags on `main`.
+The protected environment `macos-release` is configured. It requires approval from the repository
+owner and accepts only version tags matching `v*`. The workflow independently proves that the tag
+commit is contained in `origin/main` before it can publish.
 
 Environment secrets:
 
@@ -38,7 +39,8 @@ Environment secrets:
 
 GitHub supplies the short-lived `GITHUB_TOKEN` used to create the Release. Do not add a personal
 access token, AWS credential, update URL, signing file, or certificate to the repository. At the
-time the `0.2.1` candidate was prepared, the environment and all five Apple secrets were absent.
+time the `0.2.2` candidate was prepared, the environment existed but all five Apple secrets were
+absent.
 
 ## Version preparation
 
@@ -157,9 +159,9 @@ directory as a rollback mechanism.
 
 ## Current blocker
 
-GitHub Actions and normal CI are operational. The remaining external blocker is the absence of the
-protected `macos-release` environment and the five Apple Developer ID and App Store Connect secrets
-listed above. The owner machine also has no valid code-signing identity; its installed `0.2.0` is
-ad-hoc signed and rejected by Gatekeeper. Until the credentials are configured and the tag workflow
-passes signature and notarization verification, neither that local package nor `0.2.1` may be
-represented as a secure download. The automatic-update proof follows with signed `0.2.2`.
+GitHub Actions, normal CI, the protected `macos-release` environment, required owner approval, and
+the `v*` tag policy are operational. The remaining external blocker is the absence of the five Apple
+Developer ID and App Store Connect secrets listed above. The owner machine also has no valid
+code-signing identity; its installed `0.2.0` is ad-hoc signed and rejected by Gatekeeper. Until the
+credentials are configured and both tag workflows pass signature and notarization verification,
+neither `0.2.1` nor `0.2.2` may be represented as a secure download or update proof.
