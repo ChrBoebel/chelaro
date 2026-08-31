@@ -58,6 +58,24 @@ stable Semantic Versions, and compares numeric version components.
 | 7 | Pull request and `main` push events run the version gate | Workflow contract | PASS |
 | 8 | Repository instructions and PR checklist require matching release documentation | Policy | PASS |
 
+## Release-candidate verification
+
+```text
+pnpm quality
+# PASS
+
+pnpm quality:agent:macos
+# Agent Host: 112 passed, 0 failed
+# Agent Storage: 3 passed, 0 failed
+
+pnpm package:desktop
+# PASS: Chelaro-0.2.1-arm64.dmg, ZIP, blockmaps, and latest-mac.yml
+```
+
+The packaged `0.2.1` application then passed the synthetic Finance Assistant E2E with dynamically
+allocated API and Web ports. Its updater reached the public GitHub provider and correctly found no
+published versions. The installed `/Applications/Chelaro.app` remained unchanged at `0.2.0`.
+
 ## Known external gate
 
 The version and release source can be prepared without credentials. A real macOS automatic update
