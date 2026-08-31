@@ -13,6 +13,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  version-gate:
+    name: Version gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VERSION_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 10.32.1
+      - name: Verify synchronized product version increase
+        run: pnpm check:version-bump -- "$VERSION_BASE"
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest

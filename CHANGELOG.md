@@ -11,10 +11,37 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.2.1] - 2026-08-31
+
+Version `0.2.1` is the first signed update-bootstrap candidate. Publication remains blocked
+until the protected GitHub release environment contains the required Apple credentials and the
+tag workflow passes every signing and notarization gate.
+
+### Added
+
+- Isolated GPT-5.6 finance-tool routing with proposal-only authority and no general-purpose tool
+  access.
+- A mandatory CI version gate that requires every pull request into `main` to increase the stable
+  Semantic Version and keep the root, desktop, and web package versions synchronized.
+- A documented manual `0.2.1` bootstrap and subsequent `0.2.1` to `0.2.2` automatic-update
+  verification path using synthetic data only.
+
+### Fixed
+
+- Natural-language receivable requests can create reviewable proposals again through the bounded
+  finance tool router.
+- The embedded Python API runs headlessly and no longer appears as a second macOS Dock application.
+
+### Security
+
+- Release publication remains fail-closed when Developer ID signing, notarization, Gatekeeper, or
+  update-artifact verification is unavailable.
+- Local financial data and existing consent state remain outside the replaced application bundle.
+
 ## [0.2.0] - Unpublished release candidate
 
-Version `0.2.0` is the first update-capable bootstrap candidate. No signed binary or GitHub Release
-exists until the Apple signing and notarization gate succeeds.
+Version `0.2.0` was the first update-capable local prototype. It remained ad-hoc signed, was never
+published, and was superseded by the signed `0.2.1` bootstrap plan.
 
 ### Added
 

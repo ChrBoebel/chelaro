@@ -125,7 +125,8 @@ These local artifacts are verification output only and are not a secure distribu
 ## Known gaps and external gates
 
 - A real signed online update cannot be exercised until the five Apple Developer ID and App Store
-  Connect secrets are configured and stable `0.2.0` plus a higher patch release exist.
+  Connect secrets are configured. The ad-hoc `0.2.0` candidate was never published, so signed
+  `0.2.1` is now the manual bootstrap and `0.2.2` is the automatic-update proof.
 - The existing source Electron finance E2E was attempted but did not start because loopback port
   `8000` was occupied by an unrelated local development service. That service was not stopped.
   No Chelaro assertion failed in this attempt.

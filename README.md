@@ -212,10 +212,11 @@ Release-Build enthält die Provider-Konfiguration; der Nutzer entscheidet weiter
 über Download und Installation. Aktuell existieren noch keine signierten Downloads und kein
 GitHub Release, weil die Apple-Signing- und Notarisierungsdaten noch nicht konfiguriert sind.
 
-Bestehende lokale `0.1.0`-Installationen enthalten kein `app-update.yml` und können die erste
-updatefähige Version deshalb nicht selbst finden. Eine signierte `0.2.0` muss einmal manuell aus
-dem verifizierten DMG installiert werden. Erst danach kann der Update-Button eine höhere Version
-wie `0.2.1` laden. Der genaue Bootstrap-, Prüf- und Rollback-Ablauf steht im
+Bestehende lokale `0.1.0`-Installationen enthalten kein `app-update.yml`; die vorhandene lokale
+`0.2.0` ist nur ad-hoc signiert. Beide sind deshalb kein gültiger macOS-Update-Ausgangspunkt. Eine
+Developer-ID-signierte `0.2.1` muss einmal manuell aus dem verifizierten DMG installiert werden.
+Erst danach kann der Update-Button eine höhere Version wie `0.2.2` laden. Der genaue Bootstrap-,
+Prüf- und Rollback-Ablauf steht im
 [macOS Release and Update Process](docs/releases/RELEASE_PROCESS.md).
 
 ## Sicherheit und Datenintegrität

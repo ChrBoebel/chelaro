@@ -19,8 +19,9 @@
 ## Engineering workflow
 
 - Keep `main` deployable and use short-lived branches once branch protection is active.
+- Every pull request targeting `main` must increase the stable Semantic Version and keep the root, desktop, and web package versions synchronized.
+- Do not merge into `main` until the version gate, matching changelog entry, and release note pass.
 - Use Conventional Commits with focused, independently verifiable changes.
 - Update OpenAPI and generated clients together when API contracts change.
 - Add tests for the dominant failure and security modes of each change.
 - Run the relevant lint, typecheck, test, and build commands before committing.
-
