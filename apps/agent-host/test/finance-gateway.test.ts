@@ -11,7 +11,7 @@ class StubService implements FinanceGatewayService {
   state: FinanceAgentSnapshot = {
     appServer: "ready",
     auth: "authenticated",
-    consent: { status: "granted", version: "2026-08-28.v1" },
+    consent: { status: "granted", version: "2026-08-31.v2" },
     host: "ready",
     provider: { status: "ready", version: "0.151.0" },
     session: null,
@@ -22,11 +22,14 @@ class StubService implements FinanceGatewayService {
   async grantConsent(): Promise<void> { this.calls.push({ operation: "grant", values: [] }); }
   async revokeConsent(): Promise<void> { this.calls.push({ operation: "revoke", values: [] }); }
   async refreshProvider(): Promise<void> { this.calls.push({ operation: "refreshProvider", values: [] }); }
-  async createSession(sessionId: string): Promise<void> {
-    this.calls.push({ operation: "createSession", values: [sessionId] });
+  async createSession(sessionId: string, conversationId: string): Promise<void> {
+    this.calls.push({ operation: "createSession", values: [sessionId, conversationId] });
   }
   async closeSession(sessionId: string): Promise<void> {
     this.calls.push({ operation: "closeSession", values: [sessionId] });
+  }
+  async deleteConversation(conversationId: string): Promise<void> {
+    this.calls.push({ operation: "deleteConversation", values: [conversationId] });
   }
   async startTurn(sessionId: string, turnId: string, prompt: string): Promise<void> {
     this.calls.push({ operation: "startTurn", values: [sessionId, turnId, prompt] });
@@ -62,7 +65,10 @@ test("finance gateway: requires a bearer capability and rejects browser-origin t
 test("finance gateway: validates exact commands before invoking the service", async (t) => {
   const { origin, service } = await fixture(t);
   const created = await request(origin, "/v1/sessions", {
-    body: JSON.stringify({ session_id: "session_1" }),
+    body: JSON.stringify({
+      conversation_id: "123e4567-e89b-42d3-a456-426614174000",
+      session_id: "session_1",
+    }),
     headers: { "content-type": "application/json" },
     method: "POST",
   });
@@ -74,17 +80,35 @@ test("finance gateway: validates exact commands before invoking the service", as
   });
   assert.equal(turn.status, 202);
   assert.deepEqual(service.calls, [
-    { operation: "createSession", values: ["session_1"] },
+    {
+      operation: "createSession",
+      values: ["session_1", "123e4567-e89b-42d3-a456-426614174000"],
+    },
     { operation: "startTurn", values: ["session_1", "turn_1", "Wie ist mein Stand?"] },
   ]);
 
   const extended = await request(origin, "/v1/sessions", {
-    body: JSON.stringify({ extra: true, session_id: "session_2" }),
+    body: JSON.stringify({
+      conversation_id: "123e4567-e89b-42d3-a456-426614174000",
+      extra: true,
+      session_id: "session_2",
+    }),
     headers: { "content-type": "application/json" },
     method: "POST",
   });
   assert.equal(extended.status, 400);
   assert.equal(service.calls.length, 2);
+
+  const deleted = await request(
+    origin,
+    "/v1/conversations/123e4567-e89b-42d3-a456-426614174000",
+    { method: "DELETE" },
+  );
+  assert.equal(deleted.status, 200);
+  assert.deepEqual(service.calls.at(-1), {
+    operation: "deleteConversation",
+    values: ["123e4567-e89b-42d3-a456-426614174000"],
+  });
 });
 
 test("finance gateway: refreshes system Codex status without owning global login", async (t) => {

@@ -7,6 +7,7 @@ import type { InitializeResponse } from "../generated/codex/ts/InitializeRespons
 import type { GetAccountResponse } from "../generated/codex/ts/v2/GetAccountResponse.js";
 import type { LoginAccountResponse } from "../generated/codex/ts/v2/LoginAccountResponse.js";
 import type { ThreadStartResponse } from "../generated/codex/ts/v2/ThreadStartResponse.js";
+import type { ThreadResumeResponse } from "../generated/codex/ts/v2/ThreadResumeResponse.js";
 import type { TurnStartResponse } from "../generated/codex/ts/v2/TurnStartResponse.js";
 
 const serverRequestSchemaPath = new URL(
@@ -46,6 +47,9 @@ const validateLoginAccountResponseSchema = compileSchema(
 );
 const validateThreadStartResponseSchema = compileSchema(
   "../../generated/codex/schema/v2/ThreadStartResponse.json",
+);
+const validateThreadResumeResponseSchema = compileSchema(
+  "../../generated/codex/schema/v2/ThreadResumeResponse.json",
 );
 const validateTurnStartResponseSchema = compileSchema(
   "../../generated/codex/schema/v2/TurnStartResponse.json",
@@ -95,6 +99,10 @@ export function validateLoginAccountResponse(value: unknown): asserts value is L
 
 export function validateThreadStartResponse(value: unknown): asserts value is ThreadStartResponse {
   validateWithSchema(value, validateThreadStartResponseSchema, "Codex ThreadStartResponse");
+}
+
+export function validateThreadResumeResponse(value: unknown): asserts value is ThreadResumeResponse {
+  validateWithSchema(value, validateThreadResumeResponseSchema, "Codex ThreadResumeResponse");
 }
 
 export function validateTurnStartResponse(value: unknown): asserts value is TurnStartResponse {

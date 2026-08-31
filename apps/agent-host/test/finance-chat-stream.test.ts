@@ -50,7 +50,9 @@ test("finance chat stream: emits bounded, verifiable chunks for exact provider t
     turnId: "provider_turn_1",
   });
   assert.equal(stream.completeItem(completed(text)), true);
-  stream.finishTurn();
+  const persisted = stream.finishTurn();
+  assert.equal(persisted[0]?.text, text);
+  stream.publishCompletions();
 
   const chunks = events.filter((event) => event.type === "assistant.message.chunk");
   assert.equal(chunks.length > 1, true);

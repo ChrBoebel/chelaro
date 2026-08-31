@@ -58,6 +58,8 @@ class SyntheticFinanceProcess {
         return {};
       case "thread/unsubscribe":
         return { status: "unsubscribed" };
+      case "thread/delete":
+        return {};
       default:
         throw new Error(`Unexpected E2E process request: ${method}`);
     }
@@ -186,14 +188,14 @@ function safeThread(runtimeDirectory: string): Record<string, unknown> {
       cliVersion: "0.151.0",
       createdAt: 1,
       cwd: runtimeDirectory,
-      ephemeral: true,
+      ephemeral: false,
       forkedFromId: null,
       gitInfo: null,
       id: "provider_thread_e2e",
       modelProvider: "openai",
       name: null,
       parentThreadId: null,
-      path: null,
+      path: `${runtimeDirectory}/provider-thread.jsonl`,
       preview: "",
       projectId: null,
       recencyAt: 1,

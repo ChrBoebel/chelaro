@@ -37,7 +37,8 @@ configured Codex home. A bounded `account/read` with `refreshToken: false` detec
 ChatGPT account. The diagnostic emitted only booleans and provider state; it did not print account
 identity, credential paths, tokens, or configuration contents.
 
-A second real-provider smoke created an ephemeral finance thread through the running Web proxy,
+A second real-provider smoke, before ADR 0013 introduced durable conversations, created an
+ephemeral finance thread through the running Web proxy,
 streamed the exact marker `REAL_CODEX_E2E_OK` from the existing ChatGPT account, and used no finance
 tool. This exposed the removed `thread/close` RPC during cleanup. A regression test now requires
 `thread/unsubscribe`, its exact `{ "status": "unsubscribed" }` response is validated, and a final

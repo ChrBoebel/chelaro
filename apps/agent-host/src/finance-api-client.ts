@@ -26,6 +26,30 @@ export interface FinanceApiClientOptions {
   timeoutMs?: number;
 }
 
+export interface AssistantCompletedMessageInput {
+  message_id: string;
+  sha256: string;
+  text: string;
+}
+
+export interface AssistantHistoryApi {
+  bindConversationRuntime(conversationId: string, providerThreadId: string): Promise<void>;
+  completeConversationTurn(
+    conversationId: string,
+    turnId: string,
+    providerTurnId: string,
+    messages: readonly AssistantCompletedMessageInput[],
+  ): Promise<void>;
+  failConversationTurn(
+    conversationId: string,
+    turnId: string,
+    status: "failed" | "interrupted",
+    errorCode: string,
+  ): Promise<void>;
+  getConversationRuntime(conversationId: string): Promise<string | null>;
+  reserveConversationTurn(conversationId: string, turnId: string, prompt: string): Promise<void>;
+}
+
 export class FinanceApiClient {
   readonly #baseUrl: URL;
   readonly #fetch: typeof fetch;
@@ -50,26 +74,149 @@ export class FinanceApiClient {
     this.#token = undefined;
   }
 
+  async getConversationRuntime(conversationId: string): Promise<string | null> {
+    const parsed = await this.#requestJson(
+      `/api/v1/finance-assistant/conversations/${resourceId(conversationId)}/runtime`,
+      "GET",
+    );
+    if (!isRecord(parsed) || !isRecord(parsed.data) || !exactKeys(parsed, ["data"]) ||
+      !exactKeys(parsed.data, ["conversation_id", "provider_thread_id"]) ||
+      parsed.data.conversation_id !== conversationId ||
+      !(parsed.data.provider_thread_id === null || validResourceId(parsed.data.provider_thread_id))) {
+      throw new FinanceApiClientError("invalid_response");
+    }
+    return parsed.data.provider_thread_id;
+  }
+
+  async bindConversationRuntime(conversationId: string, providerThreadId: string): Promise<void> {
+    await this.#historyMutation(
+      conversationId,
+      "/runtime",
+      "PUT",
+      { provider_thread_id: resourceId(providerThreadId) },
+      undefined,
+    );
+  }
+
+  async reserveConversationTurn(conversationId: string, turnId: string, prompt: string): Promise<void> {
+    await this.#historyMutation(
+      conversationId,
+      "/turns",
+      "POST",
+      { prompt, turn_id: resourceId(turnId) },
+      turnId,
+    );
+  }
+
+  async completeConversationTurn(
+    conversationId: string,
+    turnId: string,
+    providerTurnId: string,
+    messages: readonly AssistantCompletedMessageInput[],
+  ): Promise<void> {
+    await this.#historyMutation(
+      conversationId,
+      `/turns/${resourceId(turnId)}/complete`,
+      "POST",
+      {
+        messages: messages.map((message) => ({
+          message_id: resourceId(message.message_id),
+          sha256: message.sha256,
+          text: message.text,
+        })),
+        provider_turn_id: resourceId(providerTurnId),
+      },
+      turnId,
+    );
+  }
+
+  async failConversationTurn(
+    conversationId: string,
+    turnId: string,
+    status: "failed" | "interrupted",
+    errorCode: string,
+  ): Promise<void> {
+    await this.#historyMutation(
+      conversationId,
+      `/turns/${resourceId(turnId)}/fail`,
+      "POST",
+      { error_code: errorCode, status },
+      turnId,
+    );
+  }
+
   async call(
     name: FinanceToolName,
     argumentsValue: Record<string, JsonValue>,
     options: { correlation?: ProposalCorrelation; signal?: AbortSignal } = {},
   ): Promise<JsonValue> {
+    const request = requestFor(name, argumentsValue, options.correlation);
+    const parsed = await this.#requestJson(
+      request.path,
+      request.body === undefined ? "GET" : "POST",
+      request.body,
+      options.signal,
+    );
+    const validator = responseValidators.get(name);
+    if (!validator?.(parsed)) throw new FinanceApiClientError("invalid_response");
+    return parsed as JsonValue;
+  }
+
+  async #historyMutation(
+    conversationId: string,
+    suffix: string,
+    method: "POST" | "PUT",
+    body: Record<string, unknown>,
+    turnId: string | undefined,
+  ): Promise<void> {
+    const parsed = await this.#requestJson(
+      `/api/v1/finance-assistant/conversations/${resourceId(conversationId)}${suffix}`,
+      method,
+      JSON.stringify(body),
+    );
+    if (!isRecord(parsed) || !isRecord(parsed.data) || !exactKeys(parsed, ["data"])) {
+      throw new FinanceApiClientError("invalid_response");
+    }
+    const expectedKeys = turnId === undefined
+      ? ["conversation_id", "provider_thread_id"]
+      : ["conversation_id", "status", "turn_id"];
+    if (!exactKeys(parsed.data, expectedKeys) || parsed.data.conversation_id !== conversationId) {
+      throw new FinanceApiClientError("invalid_response");
+    }
+    if (turnId === undefined && !validResourceId(parsed.data.provider_thread_id)) {
+      throw new FinanceApiClientError("invalid_response");
+    }
+    if (turnId !== undefined && parsed.data.turn_id !== turnId) {
+      throw new FinanceApiClientError("invalid_response");
+    }
+    if (turnId !== undefined &&
+      !["reserved", "running", "completed", "interrupted", "failed"].includes(
+        String(parsed.data.status),
+      )) {
+      throw new FinanceApiClientError("invalid_response");
+    }
+  }
+
+  async #requestJson(
+    path: string,
+    method: "GET" | "POST" | "PUT",
+    body?: string,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
     const token = this.#token;
     if (!token) throw new FinanceApiClientError("invalid_state");
-    const request = requestFor(name, argumentsValue, options.correlation);
     const headers = new Headers({ Authorization: `Bearer ${token}` });
-    if (request.body !== undefined) headers.set("Content-Type", "application/json");
+    if (body !== undefined) headers.set("Content-Type", "application/json");
     let response: Response;
     try {
-      response = await this.#fetch(new URL(request.path, this.#baseUrl), {
-        method: request.body === undefined ? "GET" : "POST",
+      response = await this.#fetch(new URL(path, this.#baseUrl), {
+        method,
         headers,
-        ...(request.body === undefined ? {} : { body: request.body }),
+        ...(body === undefined ? {} : { body }),
         cache: "no-store",
         redirect: "error",
         signal: AbortSignal.any([
-          ...(options.signal ? [options.signal] : []),
+          ...(signal ? [signal] : []),
           AbortSignal.timeout(this.#timeoutMs),
         ]),
       });
@@ -91,9 +238,7 @@ export class FinanceApiClient {
     } catch {
       throw new FinanceApiClientError("invalid_response");
     }
-    const validator = responseValidators.get(name);
-    if (!validator?.(parsed)) throw new FinanceApiClientError("invalid_response");
-    return parsed as JsonValue;
+    return parsed;
   }
 }
 
@@ -226,6 +371,23 @@ function validateLoopbackBaseUrl(value: string): URL {
     throw new FinanceApiClientError("invalid_configuration");
   }
   return url;
+}
+
+function resourceId(value: string): string {
+  if (!validResourceId(value)) throw new FinanceApiClientError("invalid_state");
+  return encodeURIComponent(value);
+}
+
+function validResourceId(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
 }
 
 async function readBounded(

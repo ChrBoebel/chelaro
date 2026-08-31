@@ -10,7 +10,8 @@ export const MAX_GATEWAY_SUBSCRIBERS = 4;
 
 export interface FinanceGatewayService {
   closeSession(sessionId: string): Promise<void>;
-  createSession(sessionId: string): Promise<void>;
+  createSession(sessionId: string, conversationId: string): Promise<void>;
+  deleteConversation(conversationId: string): Promise<void>;
   grantConsent(): Promise<unknown>;
   interruptTurn(): Promise<void>;
   refreshProvider(): Promise<void>;
@@ -127,9 +128,9 @@ export class FinanceGateway {
       return respondJson(response, 200, { snapshot: this.#service.snapshot() });
     }
     if (request.method === "POST" && url.pathname === "/v1/sessions") {
-      const body = exactObject(await readJson(request), ["session_id"]);
+      const body = exactObject(await readJson(request), ["conversation_id", "session_id"]);
       const sessionId = publicId(body.session_id);
-      await this.#service.createSession(sessionId);
+      await this.#service.createSession(sessionId, publicId(body.conversation_id));
       return respondJson(response, 201, { snapshot: this.#service.snapshot() });
     }
     const sessionMatch = /^\/v1\/sessions\/([A-Za-z0-9_-]{1,128})$/.exec(url.pathname);
@@ -137,6 +138,14 @@ export class FinanceGateway {
       assertNoRequestBody(request);
       await this.#service.closeSession(publicId(sessionMatch[1]));
       return respondJson(response, 200, { snapshot: this.#service.snapshot() });
+    }
+    const conversationMatch = /^\/v1\/conversations\/([A-Za-z0-9_-]{1,128})$/.exec(
+      url.pathname,
+    );
+    if (request.method === "DELETE" && conversationMatch) {
+      assertNoRequestBody(request);
+      await this.#service.deleteConversation(publicId(conversationMatch[1]));
+      return respondJson(response, 200, { deleted: true });
     }
     if (request.method === "POST" && url.pathname === "/v1/turns") {
       const body = exactObject(await readJson(request), ["prompt", "session_id", "turn_id"]);

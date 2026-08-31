@@ -11,6 +11,32 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.4.0] - 2026-08-31
+
+### Added
+
+- Complete visible finance-assistant conversations now remain in Chelaro's local database and can
+  be read after a renderer, API, or desktop restart.
+- A responsive local conversation list supports continuation, pagination, rename-ready versioned
+  resources, archiving, restoration through the API, and explicit deletion.
+- Each conversation keeps one persistent Codex thread binding and resumes that exact context on a
+  later Agent Host epoch.
+
+### Changed
+
+- The expanded consent notice explains local transcript retention, persistent Codex history,
+  deletion, and the fact that revocation stops transfers without silently erasing local history.
+- Assistant completion reaches the UI only after the complete validated response is durably stored.
+
+### Security
+
+- History excludes reasoning, stream chunks, raw tool results, and message text in audit events;
+  conversation mutations retain content-free same-transaction audit records.
+- Persistent threads reapply the restrictive finance contract, disable Codex goals, keep the exact
+  eight-tool provider manifest, and fail closed rather than silently losing context.
+- Deletion removes the bound local Codex thread before purging Chelaro's local transcript and
+  runtime binding.
+
 ## [0.3.7] - 2026-08-31
 
 ### Added

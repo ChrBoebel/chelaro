@@ -1,6 +1,5 @@
 import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,8 +12,6 @@ const electron = path.join(desktopRoot, "node_modules/.bin/electron");
 let succeeded = false;
 
 try {
-  await assertPortFree(8000);
-  await assertPortFree(3000);
   const environment = {
     ...process.env,
     FINANCE_OS_DATABASE_URL: sqliteDatabaseUrl(path.join(temporaryRoot, "finance-os.sqlite3")),
@@ -23,7 +20,6 @@ try {
     FINANCE_OS_E2E_DATA_ROOT: temporaryRoot,
     FINANCE_OS_E2E_SCENARIO: "finance-assistant",
     FINANCE_OS_QUARANTINE_ROOT: path.join(temporaryRoot, "quarantine"),
-    FINANCE_OS_WEB_ORIGIN: "http://127.0.0.1:3000",
   };
   delete environment.ELECTRON_RUN_AS_NODE;
 
@@ -46,15 +42,6 @@ try {
   } else {
     process.stderr.write(`Finance Assistant E2E diagnostics kept at ${temporaryRoot}\n`);
   }
-}
-
-function assertPortFree(port) {
-  return new Promise((resolve, reject) => {
-    const server = createServer();
-    server.unref();
-    server.once("error", () => reject(new Error(`E2E requires free loopback port ${port}.`)));
-    server.listen(port, "127.0.0.1", () => server.close(resolve));
-  });
 }
 
 function waitForExit(child, timeoutMs) {

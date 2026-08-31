@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 
 const CONSENT_NOTICE =
-  "Der Chelaro Finanzassistent sendet deine Chatnachrichten und nur die zur Beantwortung nötigen, strukturierten Finanzdaten an OpenAI. Dazu können Übersichten, Transaktionen, Forderungen, Zahlungsstatus und prüfpflichtige Änderungsvorschläge gehören. Originaldokumente, OCR-Inhalte, Bankzugänge und Ausführungsrechte werden nicht übertragen. Vorschläge ändern Finanzdaten erst nach deiner gesonderten Prüfung und Freigabe in Chelaro.";
+  "Der Chelaro Finanzassistent sendet deine Chatnachrichten und nur die zur Beantwortung nötigen, strukturierten Finanzdaten an OpenAI. Dazu können Übersichten, Transaktionen, Forderungen, Zahlungsstatus und prüfpflichtige Änderungsvorschläge gehören. Originaldokumente, OCR-Inhalte, Bankzugänge und Ausführungsrechte werden nicht übertragen. Vorschläge ändern Finanzdaten erst nach deiner gesonderten Prüfung und Freigabe in Chelaro. Vollständige sichtbare Unterhaltungen bleiben lokal auf diesem Mac gespeichert und werden über deine vorhandene Codex-Installation fortgesetzt, bis du sie löschst. Ein Widerruf stoppt neue Übertragungen, löscht vorhandene lokale Unterhaltungen aber nicht automatisch.";
 const MAX_PROMPT_CHARACTERS = 16_000;
 const MAX_ASSISTANT_MESSAGE_BYTES = 512 * 1024;
 
@@ -32,8 +32,17 @@ interface FinanceAssistantSnapshot {
   consent: { status: ConsentStatus; version: string | null };
   host: HostStatus;
   provider: { status: ProviderStatus; version: string | null };
-  session: null | { id: string; status: SessionStatus };
+  session: null | { conversationId: string | null; id: string; status: SessionStatus };
   turn: null | { id: string; status: TurnStatus };
+}
+
+interface ConversationSummary {
+  id: string;
+  version: number;
+  title: string;
+  status: "active" | "archived";
+  message_count: number;
+  updated_at: string;
 }
 
 interface DisplayMessage {
@@ -58,6 +67,11 @@ export function FinanceAssistant() {
   const [notice, setNotice] = useState<string | null>(null);
   const [isWorking, setIsWorking] = useState(false);
   const [connectionInterrupted, setConnectionInterrupted] = useState(false);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyStatus, setHistoryStatus] = useState<"active" | "archived">("active");
+  const [nextBeforeSequence, setNextBeforeSequence] = useState<number | null>(null);
   const snapshotRef = useRef<FinanceAssistantSnapshot | null>(null);
   const streamsRef = useRef(new Map<string, ActiveStream>());
 
@@ -84,7 +98,12 @@ export function FinanceAssistant() {
     if (!isRecord(event) || typeof event.type !== "string") return;
     if (event.type === "state.changed") {
       const next = parseSnapshot(event.snapshot);
-      if (next && exactKeys(event, ["snapshot", "type"])) setSnapshot(next);
+      if (next && exactKeys(event, ["snapshot", "type"])) {
+        setSnapshot(next);
+        if (next.turn && !isTurnActive(next.turn)) {
+          void loadConversationList().then(setConversations).catch(() => undefined);
+        }
+      }
       return;
     }
     const activeSnapshot = snapshotRef.current;
@@ -153,6 +172,25 @@ export function FinanceAssistant() {
   useEffect(() => {
     let disposed = false;
     let events: EventSource | undefined;
+    void loadConversationList()
+      .then((items) => {
+        if (disposed) return;
+        setConversations(items);
+        const first = items[0];
+        if (first) {
+          setActiveConversationId(first.id);
+          void loadMessages(first.id).then((stored) => {
+            if (!disposed) {
+              setMessages(stored.messages);
+              setNextBeforeSequence(stored.nextBeforeSequence);
+            }
+          });
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!disposed) setHistoryLoading(false);
+      });
     void assistantRequest("/api/assistant/status", { method: "GET" })
       .then((body) => {
         const next = parseSnapshot(body.snapshot);
@@ -204,17 +242,141 @@ export function FinanceAssistant() {
   }
 
   async function revokeConsent() {
-    const response = await runAction("/api/assistant/consent/revoke");
-    if (response) {
-      streamsRef.current.clear();
+    await runAction("/api/assistant/consent/revoke");
+  }
+
+  async function createSession(conversationId?: string) {
+    const currentSession = snapshotRef.current?.session;
+    if (currentSession && currentSession.status !== "closed") {
+      if (conversationId && currentSession.conversationId === conversationId &&
+        currentSession.status === "ready") return;
+      await closeSession();
+      if (snapshotRef.current?.session?.status !== "closed") return;
+    }
+    streamsRef.current.clear();
+    let selectedId = conversationId;
+    if (!selectedId) {
+      const created = await historyMutation("/api/assistant/conversations", "POST", {});
+      const summary = parseConversation(created.data);
+      if (!summary) {
+        setNotice("Die neue Unterhaltung konnte nicht lokal angelegt werden.");
+        return;
+      }
+      selectedId = summary.id;
+      setHistoryStatus("active");
+      setConversations([summary]);
+      void loadConversationList().then(setConversations).catch(() => undefined);
+      setActiveConversationId(summary.id);
       setMessages([]);
+      setNextBeforeSequence(null);
+    }
+    await runAction("/api/assistant/sessions", {
+      conversation_id: selectedId,
+      session_id: resourceId("session"),
+    });
+  }
+
+  async function selectConversation(conversationId: string) {
+    setActiveConversationId(conversationId);
+    setHistoryLoading(true);
+    setNotice(null);
+    try {
+      const stored = await loadMessages(conversationId);
+      setMessages(stored.messages);
+      setNextBeforeSequence(stored.nextBeforeSequence);
+    } catch {
+      setNotice("Die gespeicherte Unterhaltung konnte nicht geladen werden.");
+    } finally {
+      setHistoryLoading(false);
     }
   }
 
-  async function createSession() {
-    streamsRef.current.clear();
+  async function loadOlderMessages() {
+    if (!activeConversationId || nextBeforeSequence === null || historyLoading) return;
+    setHistoryLoading(true);
+    try {
+      const stored = await loadMessages(activeConversationId, nextBeforeSequence);
+      setMessages((current) => [...stored.messages, ...current]);
+      setNextBeforeSequence(stored.nextBeforeSequence);
+    } catch {
+      setNotice("Ältere Nachrichten konnten nicht geladen werden.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function setConversationStatus(
+    conversation: ConversationSummary,
+    status: "active" | "archived",
+  ) {
+    if (hasLiveSessionFor(conversation.id)) {
+      await closeSession();
+      if (hasLiveSessionFor(conversation.id)) return;
+    }
+    const response = await historyMutation(
+      `/api/assistant/conversations/${encodeURIComponent(conversation.id)}`,
+      "PATCH",
+      { expected_version: conversation.version, status },
+    );
+    const updated = parseConversation(response.data);
+    if (!updated) return;
+    setConversations((current) => current.filter(({ id }) => id !== updated.id));
+    if (activeConversationId === updated.id) {
+      setActiveConversationId(null);
+      setMessages([]);
+      setNextBeforeSequence(null);
+    }
+  }
+
+  async function showHistoryStatus(status: "active" | "archived") {
+    setHistoryStatus(status);
+    setHistoryLoading(true);
+    setActiveConversationId(null);
     setMessages([]);
-    await runAction("/api/assistant/sessions", { session_id: resourceId("session") });
+    setNextBeforeSequence(null);
+    try {
+      setConversations(await loadConversationList(status));
+    } catch {
+      setNotice("Die Unterhaltungsliste konnte nicht geladen werden.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function deleteConversation(conversationId: string) {
+    if (hasLiveSessionFor(conversationId)) {
+      await closeSession();
+      if (hasLiveSessionFor(conversationId)) return;
+    }
+    const provider = await fetch(
+      `/api/assistant/provider-conversations/${encodeURIComponent(conversationId)}`,
+      { method: "DELETE" },
+    );
+    if (!provider.ok) {
+      setNotice("Der zugehörige Codex-Verlauf konnte nicht gelöscht werden. Es wurde nichts entfernt.");
+      return;
+    }
+    const response = await fetch(
+      `/api/assistant/conversations/${encodeURIComponent(conversationId)}`,
+      { method: "DELETE" },
+    );
+    if (!response.ok) {
+      setNotice("Die lokale Unterhaltung konnte nicht gelöscht werden.");
+      return;
+    }
+    setConversations((current) => current.filter(({ id }) => id !== conversationId));
+    if (activeConversationId === conversationId) {
+      setActiveConversationId(null);
+      setMessages([]);
+      setNextBeforeSequence(null);
+    }
+  }
+
+  function hasLiveSessionFor(conversationId: string): boolean {
+    const session = snapshotRef.current?.session;
+    return Boolean(
+      session && session.conversationId === conversationId && session.status !== "closed",
+    );
   }
 
   async function closeSession() {
@@ -257,18 +419,29 @@ export function FinanceAssistant() {
       { id: `user:${turnId}`, role: "user", status: "complete", text: prompt },
     ]);
     promptField.value = "";
-    await runAction("/api/assistant/turns", {
+    const response = await runAction("/api/assistant/turns", {
       prompt,
       session_id: active.session.id,
       turn_id: turnId,
     });
+    if (response) void loadConversationList().then(setConversations).catch(() => undefined);
   }
 
-  if (availability === "loading") return <AssistantLoading />;
-  if (availability === "unavailable" || !snapshot) return <AssistantUnavailable />;
+  if (availability === "loading" && historyLoading) return <AssistantLoading />;
 
-  const activeTurn = isTurnActive(snapshot.turn);
-  const sessionReady = snapshot.session?.status === "ready";
+  const activeTurn = isTurnActive(snapshot?.turn ?? null);
+  const selectedConversation = conversations.find(({ id }) => id === activeConversationId);
+  const selectedConversationArchived = selectedConversation?.status === "archived";
+  const sessionReady = snapshot?.session?.status === "ready" &&
+    (snapshot.session.conversationId === null || snapshot.session.conversationId === activeConversationId);
+  const storedHistory = activeConversationId ? (
+    <StoredMessagesPanel
+      hasOlderMessages={nextBeforeSequence !== null}
+      loading={historyLoading}
+      messages={messages}
+      onLoadOlder={() => void loadOlderMessages()}
+    />
+  ) : null;
 
   return (
     <section className="pt-8 sm:pt-12" aria-labelledby="assistant-title">
@@ -277,7 +450,7 @@ export function FinanceAssistant() {
         eyebrow="Chelaro KI"
         title="Frag deine Finanzen."
         description="Verstehe Einnahmen, Ausgaben und offene Beträge. Änderungen werden immer erst als prüfbarer Vorschlag angelegt."
-        actions={snapshot.consent.status === "granted" ? (
+        actions={snapshot?.consent.status === "granted" ? (
           <AssistantControls
             activeTurn={activeTurn}
             hasLiveSession={Boolean(snapshot.session && snapshot.session.status !== "closed")}
@@ -297,33 +470,73 @@ export function FinanceAssistant() {
         ) : null}
       </div>
 
-      {snapshot.consent.status !== "granted" ? (
-        <ConsentPanel
-          pending={snapshot.consent.status === "revoke_pending" || isWorking}
-          onGrant={() => void grantConsent()}
+      <div className="mt-5 grid gap-4 lg:grid-cols-[250px_minmax(0,1fr)]">
+        <HistorySidebar
+          activeId={activeConversationId}
+          conversations={conversations}
+          historyStatus={historyStatus}
+          interactionDisabled={isWorking || activeTurn}
+          loading={historyLoading}
+          onSetStatus={(conversation, status) => void setConversationStatus(conversation, status)}
+          onDelete={(conversationId) => void deleteConversation(conversationId)}
+          onNew={() => void createSession()}
+          onSelect={(conversationId) => void selectConversation(conversationId)}
+          onShowStatus={(status) => void showHistoryStatus(status)}
+          newDisabled={isWorking || activeTurn || snapshot?.auth !== "authenticated" || snapshot?.consent.status !== "granted"}
         />
+        <div className="min-w-0">
+      {availability === "unavailable" || !snapshot ? (
+        <div className="space-y-4">
+          <AssistantUnavailable compact />
+          {storedHistory}
+        </div>
+      ) : snapshot.consent.status !== "granted" ? (
+        <div className="space-y-4">
+          <ConsentPanel
+            pending={snapshot.consent.status === "revoke_pending" || isWorking}
+            onGrant={() => void grantConsent()}
+          />
+          {storedHistory}
+        </div>
       ) : snapshot.provider.status !== "ready" || snapshot.auth !== "authenticated" ? (
-        <ProviderPanel
-          disabled={isWorking}
-          provider={snapshot.provider}
-          authenticated={snapshot.auth === "authenticated"}
-          onRefresh={() => void runAction("/api/assistant/provider/refresh")}
-        />
+        <div className="space-y-4">
+          <ProviderPanel
+            disabled={isWorking}
+            provider={snapshot.provider}
+            authenticated={snapshot.auth === "authenticated"}
+            onRefresh={() => void runAction("/api/assistant/provider/refresh")}
+          />
+          {storedHistory}
+        </div>
+      ) : selectedConversationArchived ? (
+        <div className="space-y-4">
+          <ArchivedConversationNotice />
+          {storedHistory}
+        </div>
       ) : !sessionReady ? (
-        <SessionPanel
-          disabled={isWorking || snapshot.session?.status === "starting"}
-          contextLost={snapshot.session?.status === "context_lost"}
-          onStart={() => void createSession()}
-        />
+        <div className="space-y-4">
+          <SessionPanel
+            disabled={isWorking || snapshot.session?.status === "starting"}
+            contextLost={snapshot.session?.status === "context_lost"}
+            hasHistory={activeConversationId !== null}
+            onStart={() => void createSession(activeConversationId ?? undefined)}
+          />
+          {storedHistory}
+        </div>
       ) : (
         <ChatPanel
           activeTurn={activeTurn}
           working={isWorking}
           messages={messages}
+          hasOlderMessages={nextBeforeSequence !== null}
+          historyLoading={historyLoading}
+          onLoadOlder={() => void loadOlderMessages()}
           onInterrupt={() => void runAction("/api/assistant/turns/interrupt")}
           onSubmit={submitPrompt}
         />
       )}
+        </div>
+      </div>
     </section>
   );
 }
@@ -402,17 +615,23 @@ function ProviderPanel({
 function SessionPanel({
   contextLost,
   disabled,
+  hasHistory,
   onStart,
 }: {
   contextLost: boolean;
   disabled: boolean;
+  hasHistory: boolean;
   onStart: () => void;
 }) {
   return (
     <div className="mt-5 rounded-panel border border-line bg-paper p-6 shadow-panel sm:p-8">
       <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-accent">Bereit</p>
       <h2 className="mt-3 text-2xl font-medium tracking-[-0.035em] text-ink">
-        {contextLost ? "Der alte Kontext ist nicht mehr verfügbar." : "Beginne eine private Unterhaltung."}
+        {contextLost
+          ? "Der Codex-Kontext konnte nicht wiederaufgenommen werden."
+          : hasHistory
+            ? "Setze diese Unterhaltung fort."
+            : "Beginne eine private Unterhaltung."}
       </h2>
       <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
         Frage zum Beispiel nach deinem Monatssaldo, ungewöhnlichen Ausgaben oder überfälligen Forderungen.
@@ -423,21 +642,133 @@ function SessionPanel({
         disabled={disabled}
         onClick={onStart}
       >
-        {disabled ? "Unterhaltung wird vorbereitet …" : "Neue Unterhaltung"}
+        {disabled
+          ? "Unterhaltung wird vorbereitet …"
+          : hasHistory
+            ? "Unterhaltung fortsetzen"
+            : "Neue Unterhaltung"}
       </Button>
+    </div>
+  );
+}
+
+function HistorySidebar({
+  activeId,
+  conversations,
+  historyStatus,
+  interactionDisabled,
+  loading,
+  newDisabled,
+  onDelete,
+  onNew,
+  onSelect,
+  onSetStatus,
+  onShowStatus,
+}: {
+  activeId: string | null;
+  conversations: ConversationSummary[];
+  historyStatus: "active" | "archived";
+  interactionDisabled: boolean;
+  loading: boolean;
+  newDisabled: boolean;
+  onDelete: (conversationId: string) => void;
+  onNew: () => void;
+  onSelect: (conversationId: string) => void;
+  onSetStatus: (conversation: ConversationSummary, status: "active" | "archived") => void;
+  onShowStatus: (status: "active" | "archived") => void;
+}) {
+  return (
+    <aside className="rounded-panel border border-line bg-paper p-3 shadow-panel" aria-label="Gespeicherte Unterhaltungen">
+      <Button className="w-full" size="regular" disabled={newDisabled} onClick={onNew}>
+        Neue Unterhaltung
+      </Button>
+      <div className="mt-5 flex rounded-lg bg-surface p-1 text-[11px]">
+        {(["active", "archived"] as const).map((status) => (
+          <button
+            className={`flex-1 rounded-md px-2 py-1.5 ${historyStatus === status ? "bg-paper font-semibold text-ink shadow-sm" : "text-muted"}`}
+            disabled={interactionDisabled}
+            key={status}
+            onClick={() => onShowStatus(status)}
+            type="button"
+          >
+            {status === "active" ? "Aktiv" : "Archiv"}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex max-h-64 gap-2 overflow-x-auto pb-1 lg:max-h-[52vh] lg:flex-col lg:overflow-x-visible lg:overflow-y-auto">
+        {loading && conversations.length === 0 ? (
+          <p className="px-2 py-3 text-xs text-muted">Unterhaltungen werden geladen …</p>
+        ) : conversations.length === 0 ? (
+          <p className="px-2 py-3 text-xs leading-5 text-muted">Noch keine gespeicherte Unterhaltung.</p>
+        ) : conversations.map((conversation) => (
+          <div
+            key={conversation.id}
+            className={`min-w-48 rounded-xl border p-2 ${activeId === conversation.id ? "border-accent/60 bg-accent/5" : "border-line bg-surface/40"}`}
+          >
+            <button
+              className="block w-full text-left disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={interactionDisabled}
+              onClick={() => onSelect(conversation.id)}
+              type="button"
+            >
+              <span className="block truncate text-sm font-medium text-ink">{conversation.title}</span>
+              <span className="mt-1 block text-[11px] text-muted">
+                {conversation.message_count} Nachrichten
+              </span>
+            </button>
+            <div className="mt-2 flex gap-3 text-[11px] text-muted">
+              <button
+                disabled={interactionDisabled}
+                type="button"
+                onClick={() => onSetStatus(
+                  conversation,
+                  conversation.status === "active" ? "archived" : "active",
+                )}
+              >
+                {conversation.status === "active" ? "Archivieren" : "Wiederherstellen"}
+              </button>
+              <button
+                className="text-danger disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={interactionDisabled}
+                type="button"
+                onClick={() => onDelete(conversation.id)}
+              >
+                Löschen
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function ArchivedConversationNotice() {
+  return (
+    <div className="rounded-panel border border-line bg-paper p-5 shadow-panel">
+      <p className="text-sm font-medium text-ink">Diese Unterhaltung ist archiviert.</p>
+      <p className="mt-2 text-sm leading-6 text-muted">
+        Du kannst sie weiterhin lokal lesen. Stelle sie links wieder her, um sie fortzusetzen.
+      </p>
     </div>
   );
 }
 
 function ChatPanel({
   activeTurn,
+  hasOlderMessages,
+  historyLoading,
   messages,
+  onLoadOlder,
   onInterrupt,
   onSubmit,
   working,
 }: {
   activeTurn: boolean;
+  hasOlderMessages: boolean;
+  historyLoading: boolean;
   messages: DisplayMessage[];
+  onLoadOlder: () => void;
   onInterrupt: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   working: boolean;
@@ -445,6 +776,13 @@ function ChatPanel({
   return (
     <div className="mt-5 overflow-hidden rounded-panel border border-line bg-paper shadow-panel">
       <div className="min-h-[360px] max-h-[58vh] overflow-y-auto p-5 sm:p-7" aria-live="polite" aria-label="Unterhaltung mit dem Finanzassistenten">
+        {hasOlderMessages ? (
+          <div className="mb-4 text-center">
+            <button className="text-xs font-medium text-accent" disabled={historyLoading} onClick={onLoadOlder} type="button">
+              {historyLoading ? "Wird geladen …" : "Ältere Nachrichten laden"}
+            </button>
+          </div>
+        ) : null}
         {messages.length === 0 ? (
           <div className="mx-auto flex min-h-[310px] max-w-2xl flex-col items-center justify-center text-center">
             <span className="grid size-11 place-items-center rounded-full bg-accent/10 text-xl text-accent" aria-hidden="true">◇</span>
@@ -510,6 +848,41 @@ function ChatPanel({
   );
 }
 
+function StoredMessagesPanel({
+  hasOlderMessages,
+  loading,
+  messages,
+  onLoadOlder,
+}: {
+  hasOlderMessages: boolean;
+  loading: boolean;
+  messages: DisplayMessage[];
+  onLoadOlder: () => void;
+}) {
+  return (
+    <div className="max-h-[58vh] overflow-y-auto rounded-panel border border-line bg-paper p-5 shadow-panel" aria-label="Lokal gespeicherte Unterhaltung">
+      <p className="mb-4 text-xs text-muted">Dieser Verlauf ist lokal lesbar. Zum Fortsetzen muss Codex verfügbar sein.</p>
+      {hasOlderMessages ? (
+        <button className="mb-4 text-xs font-medium text-accent" disabled={loading} onClick={onLoadOlder} type="button">
+          {loading ? "Wird geladen …" : "Ältere Nachrichten laden"}
+        </button>
+      ) : null}
+      <div className="mx-auto flex max-w-3xl flex-col gap-4">
+        {messages.map((message) => (
+          <article
+            key={message.id}
+            className={message.role === "user"
+              ? "ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-ink px-4 py-3 text-sm leading-6 text-paper"
+              : "mr-auto max-w-[92%] rounded-2xl rounded-bl-md bg-surface px-4 py-3 text-sm leading-6 text-foreground"}
+          >
+            <p className="whitespace-pre-wrap break-words">{message.text}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AssistantControls({
   activeTurn,
   consentGranted,
@@ -544,9 +917,9 @@ function AssistantLoading() {
   return <section className="pt-12" aria-label="Finanzassistent wird geladen"><div className="h-72 animate-pulse rounded-panel border border-line bg-surface" /></section>;
 }
 
-function AssistantUnavailable() {
+function AssistantUnavailable({ compact = false }: { compact?: boolean }) {
   return (
-    <section className="pt-12" aria-labelledby="assistant-unavailable-title">
+    <section className={compact ? "rounded-panel border border-line bg-paper p-6 shadow-panel" : "pt-12"} aria-labelledby="assistant-unavailable-title">
       <PageHeader
         titleId="assistant-unavailable-title"
         eyebrow="Chelaro KI"
@@ -562,6 +935,68 @@ async function assistantRequest(path: string, init: RequestInit): Promise<Record
   const body: unknown = await response.json().catch(() => undefined);
   if (!response.ok || !isRecord(body)) throw new Error("assistant_request_failed");
   return body;
+}
+
+async function historyMutation(
+  path: string,
+  method: "PATCH" | "POST",
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  return assistantRequest(path, {
+    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+    method,
+  });
+}
+
+async function loadConversationList(
+  status: "active" | "archived" = "active",
+): Promise<ConversationSummary[]> {
+  const suffix = status === "archived" ? "?status=archived" : "";
+  const response = await assistantRequest(`/api/assistant/conversations${suffix}`, { method: "GET" });
+  if (!Array.isArray(response.data)) return [];
+  return response.data.map(parseConversation).filter((item): item is ConversationSummary => item !== null);
+}
+
+async function loadMessages(
+  conversationId: string,
+  beforeSequence?: number,
+): Promise<{ messages: DisplayMessage[]; nextBeforeSequence: number | null }> {
+  const suffix = beforeSequence === undefined ? "" : `?before_sequence=${beforeSequence}`;
+  const response = await assistantRequest(
+    `/api/assistant/conversations/${encodeURIComponent(conversationId)}/messages${suffix}`,
+    { method: "GET" },
+  );
+  if (!Array.isArray(response.data)) throw new Error("invalid_history");
+  const messages = response.data.map((value): DisplayMessage | null => {
+    if (!isRecord(value) ||
+      typeof value.id !== "string" ||
+      !isOneOf(value.role, ["assistant", "user"]) ||
+      !isOneOf(value.status, ["complete", "interrupted", "failed"]) ||
+      typeof value.text !== "string") return null;
+    return {
+      id: `stored:${value.id}`,
+      role: value.role,
+      status: value.status === "complete" ? "complete" : "failed",
+      text: value.text,
+    };
+  }).filter((message): message is DisplayMessage => message !== null);
+  const next = response.next_before_sequence;
+  if (!(next === null || (Number.isSafeInteger(next) && Number(next) >= 2))) {
+    throw new Error("invalid_history_cursor");
+  }
+  return { messages, nextBeforeSequence: next as number | null };
+}
+
+function parseConversation(value: unknown): ConversationSummary | null {
+  if (!isRecord(value) ||
+    typeof value.id !== "string" ||
+    !Number.isSafeInteger(value.version) || Number(value.version) < 1 ||
+    typeof value.title !== "string" || value.title.length === 0 ||
+    !isOneOf(value.status, ["active", "archived"]) ||
+    !Number.isSafeInteger(value.message_count) || Number(value.message_count) < 0 ||
+    typeof value.updated_at !== "string") return null;
+  return value as unknown as ConversationSummary;
 }
 
 function parseSnapshot(value: unknown): FinanceAssistantSnapshot | null {
@@ -587,7 +1022,8 @@ function parseSnapshot(value: unknown): FinanceAssistantSnapshot | null {
 function validSession(value: unknown): boolean {
   return value === null || (
     isRecord(value) &&
-    exactKeys(value, ["id", "status"]) &&
+    exactKeys(value, ["conversationId", "id", "status"]) &&
+    (value.conversationId === null || typeof value.conversationId === "string") &&
     validResourceId(value.id) &&
     isOneOf(value.status, ["starting", "ready", "context_lost", "closed"])
   );

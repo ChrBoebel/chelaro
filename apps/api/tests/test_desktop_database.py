@@ -52,7 +52,7 @@ async def test_desktop_database_bootstraps_once_and_stores_money_as_integer_cent
     assert stored == (12_345_678_912, "integer")
     assert loaded is not None
     assert loaded.amount == Decimal("123456789.12")
-    assert version == 3
+    assert version == 4
     await database.dispose()
 
 
@@ -65,6 +65,15 @@ async def test_desktop_database_migrates_v1_proposals_without_data_loss(
 
     async with database.engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+        for table in (
+            "assistant_conversation_events",
+            "assistant_provider_runtime",
+            "assistant_activities",
+            "assistant_turns",
+            "assistant_messages",
+            "assistant_conversations",
+        ):
+            await connection.execute(text(f"DROP TABLE {table}"))  # noqa: S608
         await connection.execute(text("DROP TABLE finance_proposal_events"))
         await connection.execute(
             text("DROP INDEX ix_finance_change_proposals_status_created")
@@ -216,7 +225,7 @@ async def test_desktop_database_migrates_v1_proposals_without_data_loss(
             await connection.execute(text("PRAGMA foreign_key_check"))
         ).all()
 
-    assert versions == [1, 2, 3]
+    assert versions == [1, 2, 3, 4]
     assert proposal == (
         "receivable_update",
         1,
@@ -230,6 +239,63 @@ async def test_desktop_database_migrates_v1_proposals_without_data_loss(
         ("approved", "owner", "owner"),
     ]
     assert foreign_key_violations == []
+    await database.dispose()
+
+
+@pytest.mark.asyncio
+async def test_desktop_database_migrates_v3_to_durable_assistant_history(
+    tmp_path: Path,
+) -> None:
+    database = Database(f"sqlite+aiosqlite:///{tmp_path / 'finance-os-v3.sqlite3'}")
+
+    async with database.engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+        for table in (
+            "assistant_conversation_events",
+            "assistant_provider_runtime",
+            "assistant_activities",
+            "assistant_turns",
+            "assistant_messages",
+            "assistant_conversations",
+        ):
+            await connection.execute(text(f"DROP TABLE {table}"))  # noqa: S608
+        await connection.execute(
+            text(
+                "CREATE TABLE desktop_schema_migrations ("
+                "version INTEGER PRIMARY KEY NOT NULL, applied_at TEXT NOT NULL)"
+            )
+        )
+        await connection.execute(
+            text(
+                "INSERT INTO desktop_schema_migrations (version, applied_at) "
+                "VALUES (3, '2026-08-31T10:00:00+00:00')"
+            )
+        )
+
+    await database.prepare_schema()
+
+    async with database.engine.connect() as connection:
+        version = (
+            await connection.execute(text("SELECT MAX(version) FROM desktop_schema_migrations"))
+        ).scalar_one()
+        tables = {
+            row[0]
+            for row in (
+                await connection.execute(
+                    text("SELECT name FROM sqlite_master WHERE type = 'table'")
+                )
+            ).all()
+        }
+
+    assert version == 4
+    assert {
+        "assistant_activities",
+        "assistant_conversation_events",
+        "assistant_conversations",
+        "assistant_messages",
+        "assistant_provider_runtime",
+        "assistant_turns",
+    } <= tables
     await database.dispose()
 
 

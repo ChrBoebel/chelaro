@@ -49,8 +49,8 @@ test("contract: pinned App Server accepts the no-environment finance thread", as
     };
     assertSafeFinanceThreadResponse(result, temporaryRoot);
     assert.equal(result.approvalPolicy, "never");
-    assert.equal(result.thread.ephemeral, true);
-    assert.equal(result.thread.path, null);
+    assert.equal(result.thread.ephemeral, false);
+    assert.equal(typeof result.thread.path, "string");
   } finally {
     rpc.close();
     child.kill("SIGTERM");

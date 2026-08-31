@@ -18,13 +18,17 @@ import type { FinanceConsentAuthority } from "./finance-tool-dispatcher.js";
 
 export const FINANCE_CONSENT_PROVIDER = "openai";
 export const FINANCE_CONSENT_SCHEMA_VERSION = 1;
-export const FINANCE_CONSENT_VERSION = "2026-08-28.v1";
+export const FINANCE_CONSENT_VERSION = "2026-08-31.v2";
 export const FINANCE_CONSENT_NOTICE = [
   "Der Chelaro Finanzassistent sendet deine Chatnachrichten und nur die zur Beantwortung nötigen,",
   "strukturierten Finanzdaten an OpenAI. Dazu können Übersichten, Transaktionen, Forderungen,",
   "Zahlungsstatus und prüfpflichtige Änderungsvorschläge gehören. Originaldokumente, OCR-Inhalte,",
   "Bankzugänge und Ausführungsrechte werden nicht übertragen. Vorschläge ändern Finanzdaten erst",
   "nach deiner gesonderten Prüfung und Freigabe in Chelaro.",
+  "Vollständige sichtbare Unterhaltungen werden lokal auf diesem Mac gespeichert, bis du sie",
+  "löschst. Chelaro legt außerdem einen fortsetzbaren Verlauf in deiner vorhandenen lokalen",
+  "Codex-Installation an. Ein Widerruf stoppt neue Übertragungen, löscht aber nicht automatisch",
+  "deine bereits lokal gespeicherten Unterhaltungen.",
 ].join(" ");
 export const FINANCE_CONSENT_NOTICE_HASH = sha256(FINANCE_CONSENT_NOTICE);
 export const FINANCE_CONSENT_DATA_CATEGORIES = Object.freeze([

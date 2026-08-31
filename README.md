@@ -143,6 +143,11 @@ prüfpflichtige Vorschläge; Änderungen bestehender Daten bleiben versionsgebun
 öffentlichen Paket bleibt eine experimentelle Preview. Der REST-Zugriff für lokale externe Agents bleibt
 davon getrennt.
 
+Vollständige sichtbare Assistenten-Unterhaltungen werden lokal gespeichert, paginiert wieder
+angezeigt und über ihre gebundene Codex-Thread-ID nach einem Neustart fortgesetzt. Chatverläufe
+bleiben auch ohne laufenden Codex-Dienst lesbar; Reasoning, Stream-Fragmente und rohe Tool-Ausgaben
+werden nicht als Verlauf dupliziert. Archivierung und Löschung bleiben ausdrücklich nutzergesteuert.
+
 Interne Namen wie das `FINANCE_OS_*`-Konfigurationspräfix und das Python-Paket
 `finance_os_api` bleiben vorerst als Kompatibilitätsgrenze bestehen. Die öffentliche Produktmarke
 ist **Chelaro**.
