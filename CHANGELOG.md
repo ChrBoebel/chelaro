@@ -13,7 +13,7 @@ All notable Chelaro changes are recorded here. The format follows
 
 ## [0.2.1] - 2026-08-31
 
-Version `0.2.1` is the first signed automatic-update proof candidate. Publication remains blocked
+Version `0.2.1` is the first signed update-bootstrap candidate. Publication remains blocked
 until the protected GitHub release environment contains the required Apple credentials and the
 tag workflow passes every signing and notarization gate.
 
@@ -23,7 +23,8 @@ tag workflow passes every signing and notarization gate.
   access.
 - A mandatory CI version gate that requires every pull request into `main` to increase the stable
   Semantic Version and keep the root, desktop, and web package versions synchronized.
-- A documented `0.2.0` to `0.2.1` automatic-update verification path using synthetic data only.
+- A documented manual `0.2.1` bootstrap and subsequent `0.2.1` to `0.2.2` automatic-update
+  verification path using synthetic data only.
 
 ### Fixed
 
@@ -39,8 +40,8 @@ tag workflow passes every signing and notarization gate.
 
 ## [0.2.0] - Unpublished release candidate
 
-Version `0.2.0` is the first update-capable bootstrap candidate. No signed binary or GitHub Release
-exists until the Apple signing and notarization gate succeeds.
+Version `0.2.0` was the first update-capable local prototype. It remained ad-hoc signed, was never
+published, and was superseded by the signed `0.2.1` bootstrap plan.
 
 ### Added
 

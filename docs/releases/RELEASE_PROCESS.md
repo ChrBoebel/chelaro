@@ -12,13 +12,14 @@ A tag must never be created merely to test incomplete release configuration.
 ## Bootstrap boundary
 
 An installed build without `Contents/Resources/app-update.yml` cannot discover a later release.
-That applies to the existing local `0.1.0` installations. The first signed update-capable release,
-`0.2.0`, therefore requires a one-time manual DMG installation.
+That applies to the existing local `0.1.0` installations. The existing local `0.2.0` does contain
+the provider configuration, but it is ad-hoc signed and therefore cannot prove macOS automatic
+updates. It was never published.
 
-From `0.2.0` onward, each packaged build embeds the public GitHub provider configuration. A newer
-stable GitHub Release with a higher Semantic Version can then be discovered, downloaded, and
-installed through Chelaro's explicit update button. Verify this boundary by publishing a higher
-patch release such as `0.2.1`; republishing `0.2.0` can never test version discovery.
+The first Developer-ID-signed update-capable release, `0.2.1`, therefore requires a one-time manual
+DMG installation. From that signed version onward, a newer stable GitHub Release with a higher
+Semantic Version can be discovered, downloaded, and installed through Chelaro's explicit update
+button. Verify this boundary with `0.2.2`; republishing `0.2.1` can never test version discovery.
 
 ## Required GitHub environment
 
@@ -106,11 +107,11 @@ build. Publication happens in the final explicit `gh release create` step, after
 
 ## Bootstrap installation and update E2E
 
-For `0.2.0` only:
+For `0.2.1` only:
 
 1. download the signed DMG from the GitHub Release;
 2. verify its SHA-256 checksum;
-3. install it manually over the prior `0.1.0` app without touching
+3. install it manually over the prior local app without touching
    `~/Library/Application Support/Finance OS/`;
 4. verify `app-update.yml` exists in the installed bundle;
 5. verify Chelaro starts, reuses the system Codex login, and opens the existing local database.
@@ -119,13 +120,13 @@ The baseline must carry a real Developer ID signature. An unsigned or ad-hoc-sig
 may contain `app-update.yml`, but macOS automatic updates require the running application itself to
 be signed and therefore cannot be proven from that package.
 
-For the first automatic-update proof, publish a signed `0.2.1` containing only a harmless visible
-release marker. From installed `0.2.0`:
+For the first automatic-update proof, publish a signed `0.2.2` containing only a harmless visible
+release marker. From installed signed `0.2.1`:
 
 1. wait for the startup update check or restart the app;
-2. confirm the update button announces `0.2.1`;
+2. confirm the update button announces `0.2.2`;
 3. download and install through the button;
-4. confirm Chelaro restarts as `0.2.1`;
+4. confirm Chelaro restarts as `0.2.2`;
 5. confirm existing documents, proposals, audit events, Codex login reuse, and consent state remain
    intact;
 6. record only synthetic test evidence in the release notes.
@@ -161,4 +162,4 @@ protected `macos-release` environment and the five Apple Developer ID and App St
 listed above. The owner machine also has no valid code-signing identity; its installed `0.2.0` is
 ad-hoc signed and rejected by Gatekeeper. Until the credentials are configured and the tag workflow
 passes signature and notarization verification, neither that local package nor `0.2.1` may be
-represented as a secure automatic-update proof.
+represented as a secure download. The automatic-update proof follows with signed `0.2.2`.

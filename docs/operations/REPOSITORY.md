@@ -31,7 +31,7 @@ code.
 | Issues | Enabled |
 | Projects | Disabled initially |
 | Discussions | Disabled initially |
-| Releases | None; the `0.2.1` signed automatic-update proof is prepared on a release branch |
+| Releases | None; the signed `0.2.1` update bootstrap is prepared on a release branch |
 | Dependabot alerts | Use the capabilities available on the public repository |
 | Secret scanning | Use the capabilities available on the public repository |
 | Required branch rules | `main` requires a pull request and the documented CI checks |
