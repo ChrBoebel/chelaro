@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { rename, rm } from "node:fs/promises";
+import { link, mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -34,9 +34,8 @@ export function createGitHubReleaseClient({ fetchImpl = globalThis.fetch } = {})
     async downloadRelease(release, destinationDirectory, onProgress = () => {}) {
       validateReleaseDescriptor(release);
       const expectedChecksum = await fetchExpectedChecksum(fetchImpl, release);
-      const destinationPath = path.join(destinationDirectory, release.dmg.name);
-      const partialPath = `${destinationPath}.download`;
-      await rm(partialPath, { force: true });
+      const temporaryDirectory = await mkdtemp(path.join(destinationDirectory, ".chelaro-update-"));
+      const partialPath = path.join(temporaryDirectory, release.dmg.name);
 
       try {
         const response = await fetchImpl(release.dmg.url, { headers: githubHeaders() });
@@ -67,15 +66,34 @@ export function createGitHubReleaseClient({ fetchImpl = globalThis.fetch } = {})
           throw new Error("The downloaded DMG checksum does not match SHA256SUMS.txt.");
         }
 
-        await rename(partialPath, destinationPath);
+        const destinationPath = await linkWithoutOverwrite(
+          partialPath,
+          destinationDirectory,
+          release.dmg.name,
+        );
         onProgress(100);
         return destinationPath;
-      } catch (error) {
-        await rm(partialPath, { force: true });
-        throw error;
+      } finally {
+        await rm(temporaryDirectory, { force: true, recursive: true });
       }
     },
   };
+}
+
+async function linkWithoutOverwrite(sourcePath, destinationDirectory, assetName) {
+  const extension = path.extname(assetName);
+  const baseName = path.basename(assetName, extension);
+  for (let copy = 0; copy < 100; copy += 1) {
+    const suffix = copy === 0 ? "" : ` (${copy})`;
+    const destinationPath = path.join(destinationDirectory, `${baseName}${suffix}${extension}`);
+    try {
+      await link(sourcePath, destinationPath);
+      return destinationPath;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+    }
+  }
+  throw new Error("No unused destination name is available for the Chelaro DMG.");
 }
 
 function validateRelease(payload) {

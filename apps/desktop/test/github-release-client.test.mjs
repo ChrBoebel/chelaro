@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -100,7 +100,27 @@ test("a corrupt DMG is rejected and its partial download is removed", async () =
     /checksum does not match/,
   );
   await assert.rejects(
-    readFile(path.join(destination, "Chelaro-0.3.0-arm64.dmg.download")),
+    readFile(path.join(destination, "Chelaro-0.3.0-arm64.dmg")),
     { code: "ENOENT" },
   );
+  assert.deepEqual(await readdir(destination), []);
+});
+
+test("an existing downloaded DMG is never overwritten", async () => {
+  const destination = await mkdtemp(path.join(os.tmpdir(), "chelaro-update-test-"));
+  const existingPath = path.join(destination, "Chelaro-0.3.0-arm64.dmg");
+  await writeFile(existingPath, "existing user download");
+  const responses = [
+    releaseResponse(),
+    new Response(`${checksum}  Chelaro-0.3.0-arm64.dmg\n`),
+    new Response(payload),
+  ];
+  const client = createGitHubReleaseClient({ fetchImpl: async () => responses.shift() });
+  const release = await client.getLatestRelease("0.2.2");
+
+  const installerPath = await client.downloadRelease(release, destination);
+
+  assert.equal(installerPath, path.join(destination, "Chelaro-0.3.0-arm64 (1).dmg"));
+  assert.equal(await readFile(existingPath, "utf8"), "existing user download");
+  assert.deepEqual(await readFile(installerPath), payload);
 });
