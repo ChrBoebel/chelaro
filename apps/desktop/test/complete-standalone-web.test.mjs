@@ -37,3 +37,22 @@ test("standalone completion copies only the direct helper ESM directory", async 
     await rm(repositoryDirectory, { recursive: true, force: true });
   }
 });
+
+test("standalone completion rejects helper paths outside the repository", async () => {
+  const repositoryDirectory = await mkdtemp(path.join(os.tmpdir(), "chelaro-standalone-root-"));
+  const outsideDirectory = await mkdtemp(path.join(os.tmpdir(), "chelaro-standalone-outside-"));
+
+  try {
+    await assert.rejects(
+      completeStandaloneWeb({
+        repositoryDirectory,
+        webDirectory: path.join(repositoryDirectory, "apps", "web"),
+        helpersDirectory: outsideDirectory,
+      }),
+      /Helpers directory must be a child of the repository/,
+    );
+  } finally {
+    await rm(repositoryDirectory, { recursive: true, force: true });
+    await rm(outsideDirectory, { recursive: true, force: true });
+  }
+});
