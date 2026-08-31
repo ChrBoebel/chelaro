@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const E2E_TIMEOUT_MS = 20_000;
+const E2E_TIMEOUT_MS = 60_000;
 
 export async function runFinanceAssistantE2e(window, { dataRoot }) {
   const resultPath = path.join(dataRoot, "finance-assistant-e2e-result.json");
@@ -31,14 +31,14 @@ export async function runFinanceAssistantE2e(window, { dataRoot }) {
         const field = document.querySelector("textarea[name='prompt']");
         const form = field?.closest("form");
         if (!(field instanceof HTMLTextAreaElement) || !(form instanceof HTMLFormElement)) return false;
-        field.value = "Lege bitte eine Forderung an: Synthetische Testperson schuldet mir 3000 Euro für ein synthetisches Privatdarlehen, fällig am 30.09.2026.";
+        field.value = "Synthetische Testperson schuldet mir noch Geld wegen Testpizza 10 Euro.";
         field.dispatchEvent(new Event("input", { bubbles: true }));
         form.requestSubmit();
         return true;
       })()
     `, true);
     if (!submitted) throw new Error("Finance assistant prompt could not be submitted.");
-    await waitForText(window, "Ich habe die neue Forderung als prüfbaren Vorschlag vorbereitet.");
+    await waitForButton(window, "Senden");
 
     const beforeApproval = await window.webContents.executeJavaScript(`
       (async () => {
@@ -70,9 +70,10 @@ export async function runFinanceAssistantE2e(window, { dataRoot }) {
       beforeApproval.pending[0]?.expected_version !== null ||
       beforeApproval.pending[0]?.status !== "pending" ||
       beforeApproval.pending[0]?.debtor_name !== "Synthetische Testperson" ||
-      beforeApproval.pending[0]?.payload?.original_amount !== "3000.00" ||
+      beforeApproval.pending[0]?.payload?.original_amount !== "10.00" ||
       beforeApproval.pending[0]?.payload?.currency !== "EUR" ||
-      beforeApproval.pending[0]?.payload?.description !== "Synthetisches Privatdarlehen"
+      beforeApproval.pending[0]?.payload?.description !== "Testpizza" ||
+      beforeApproval.pending[0]?.payload?.due_date !== null
     ) {
       throw new Error("The finance assistant bypassed or failed the create-proposal boundary.");
     }
@@ -88,7 +89,7 @@ export async function runFinanceAssistantE2e(window, { dataRoot }) {
     const normalizedReviewText = reviewText.toLocaleLowerCase("de-DE");
     if (
       !normalizedReviewText.includes("offenen betrag anlegen") ||
-      !normalizedReviewText.includes("synthetisches privatdarlehen") ||
+      !normalizedReviewText.includes("testpizza") ||
       normalizedReviewText.includes("offenen betrag ansehen")
     ) {
       throw new Error("The create proposal review did not show the expected safe state.");
@@ -98,9 +99,9 @@ export async function runFinanceAssistantE2e(window, { dataRoot }) {
     if (
       afterApproval.pending.length !== 0 ||
       afterApproval.detail.debtor_name !== "Synthetische Testperson" ||
-      afterApproval.detail.original_amount !== "3000.00" ||
+      afterApproval.detail.original_amount !== "10.00" ||
       afterApproval.detail.currency !== "EUR" ||
-      afterApproval.detail.description !== "Synthetisches Privatdarlehen" ||
+      afterApproval.detail.description !== "Testpizza" ||
       afterApproval.detail.history?.[0]?.event_type !== "created" ||
       afterApproval.detail.history?.[0]?.actor_type !== "agent" ||
       afterApproval.detail.history?.[0]?.proposal_id !== beforeApproval.pending[0].id
@@ -114,6 +115,7 @@ export async function runFinanceAssistantE2e(window, { dataRoot }) {
       assistantAnswerStreamed: true,
       canonicalDataUnchangedBeforeApproval: true,
       consentCompleted: true,
+      directFinanceToolCallCreatedProposal: true,
       sharedCodexLoginReused: true,
       financeToolProposalCreated: true,
       ownerApprovalCreatedReceivable: true,

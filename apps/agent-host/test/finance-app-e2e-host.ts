@@ -69,9 +69,8 @@ class SyntheticFinanceProcess {
       arguments: {
         currency: "EUR",
         debtor_name: "Synthetische Testperson",
-        description: "Synthetisches Privatdarlehen",
-        due_date: "2026-09-30",
-        original_amount: "3000.00",
+        description: "Testpizza",
+        original_amount: "10.00",
         rationale: "Der synthetische E2E-Dialog bittet ausdrücklich um eine neue prüfbare Forderung.",
       },
       callId: "call_propose_create",
