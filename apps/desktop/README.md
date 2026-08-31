@@ -22,6 +22,7 @@ Hintergrundprozess, ohne als zweite Anwendung im macOS Dock zu erscheinen.
 
 ## Updateablauf
 
+- Bestehende `0.2.x`-Apps benötigen einmalig die manuelle `0.3.0`-Installation aus der GitHub-DMG.
 - Ab `0.3.0` prüft Chelaro den neuesten stabilen GitHub Release beim Start und alle sechs Stunden.
 - Nur die exakt erwartete `Chelaro-X.Y.Z-arm64.dmg` und `SHA256SUMS.txt` werden akzeptiert.
 - Chelaro prüft Größe und SHA-256-Prüfsumme, bevor es die DMG öffnen kann.

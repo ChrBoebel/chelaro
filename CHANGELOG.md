@@ -24,6 +24,8 @@ All notable Chelaro changes are recorded here. The format follows
 
 - The protected release workflow now publishes one unsigned Apple-Silicon DMG plus
   `SHA256SUMS.txt` without Apple Developer Program credentials.
+- `0.3.0` becomes the one-time manual bootstrap required before later `0.3.x` releases can be
+  discovered through the new in-app flow.
 - Updates replace the application only through the user's explicit Finder action; Chelaro no longer
   invokes the unsupported unsigned Squirrel in-place updater.
 

@@ -9,6 +9,17 @@ This is intentionally not an automatic in-place updater. It requires no Apple De
 Developer-ID certificate, notarization credential, client token, paid storage, or separate update
 service.
 
+## Bootstrap boundary
+
+Versions `0.2.x` contain the superseded Squirrel prototype and cannot discover this manual update
+channel. `0.3.0` is therefore a one-time manual bootstrap: download its DMG from the GitHub Release,
+independently compare its checksum, and replace the old application. From installed `0.3.0`
+onward, Chelaro can announce and download a separately published higher version such as `0.3.1`.
+
+Never represent the synthetic E2E or an installed `0.2.x` build as proof of a real cross-version
+GitHub update. That proof requires both the published `0.3.0` baseline and a later immutable stable
+release.
+
 ## Trust boundary
 
 The client accepts a release only when all of these conditions hold:
@@ -121,7 +132,9 @@ the exact asset names and will reject duplicates or mismatches.
 
 - Confirm the Release is stable/latest and reports the expected `vX.Y.Z` tag.
 - Independently compare `shasum -a 256` for the DMG with `SHA256SUMS.txt`.
-- Start the previous installed version and confirm the update control announces `X.Y.Z`.
+- For the `0.3.0` bootstrap, install the DMG manually over the existing `0.2.x` application.
+- For `0.3.1` and later, start the previous installed `0.3.x` version and confirm the update control
+  announces `X.Y.Z`.
 - Exercise download, verification, DMG opening, manual replacement, and Gatekeeper instructions.
 - Confirm the About panel reports the new version after restart.
 - Confirm existing synthetic documents, proposals, audit events, Codex login reuse, and consent
