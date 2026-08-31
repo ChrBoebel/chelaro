@@ -5,74 +5,69 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { GITHUB_RELEASE_CHANNEL } from "../src/github-release-client.mjs";
+
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const desktopRoot = path.resolve(testDirectory, "..");
 const repositoryRoot = path.resolve(desktopRoot, "../..");
 const require = createRequire(import.meta.url);
 
-test("every packaged desktop build embeds the public GitHub update provider", () => {
-  const configuration = loadConfiguration({ signing: false });
-
-  assert.deepEqual(configuration.publish, [{
-    provider: "github",
+test("the desktop client uses the reviewed public GitHub release channel", () => {
+  assert.deepEqual(GITHUB_RELEASE_CHANNEL, {
     owner: "ChrBoebel",
-    repo: "chelaro",
-    releaseType: "release",
-  }]);
-  assert.deepEqual(configuration.mac.target, [
-    { target: "dmg", arch: ["arm64"] },
-    { target: "zip", arch: ["arm64"] },
-  ]);
+    repository: "chelaro",
+  });
 });
 
-test("production release packaging enables Apple security controls", () => {
-  const configuration = loadConfiguration({ signing: true });
+test("free packaging creates one unsigned Apple Silicon DMG", () => {
+  const configurationPath = require.resolve("../electron-builder.config.cjs");
+  delete require.cache[configurationPath];
+  const configuration = require(configurationPath);
 
-  assert.equal(configuration.mac.identity, undefined);
-  assert.equal(configuration.mac.hardenedRuntime, true);
-  assert.equal(configuration.mac.notarize, true);
-  assert.equal(configuration.mac.entitlements, "build/entitlements.mac.plist");
-  assert.equal(configuration.mac.entitlementsInherit, "build/entitlements.mac.inherit.plist");
+  assert.equal(configuration.mac.identity, null);
+  assert.equal(configuration.mac.hardenedRuntime, false);
+  assert.equal(configuration.mac.notarize, false);
+  assert.deepEqual(configuration.mac.target, [{ target: "dmg", arch: ["arm64"] }]);
+  assert.equal(configuration.publish, undefined);
 });
 
-test("desktop release publishes the complete macOS update set without AWS", async () => {
+test("GitHub publishes the DMG and checksum without Apple credentials", async () => {
   const workflow = await readFile(
     path.join(repositoryRoot, ".github/workflows/release-desktop.yml"),
     "utf8",
   );
 
   for (const forbidden of [
-    "FINANCE_OS_UPDATE_URL",
-    "FINANCE_OS_UPDATE_BUCKET",
-    "UPDATE_AWS_ACCESS_KEY_ID",
-    "UPDATE_AWS_SECRET_ACCESS_KEY",
-    "aws s3",
-    "publish-desktop-update.sh",
+    "MACOS_CERTIFICATE",
+    "APPLE_API_",
+    "CSC_LINK",
+    "codesign --verify",
+    "xcrun stapler",
+    "latest-mac.yml",
+    "*.zip.blockmap",
   ]) {
-    assert.doesNotMatch(workflow, new RegExp(forbidden));
+    assert.doesNotMatch(workflow, new RegExp(escapeRegex(forbidden)));
   }
   for (const required of [
     "environment: macos-release",
     "pnpm quality",
     "pnpm package:desktop",
-    "codesign --verify --deep --strict",
-    "xcrun stapler validate",
+    "hdiutil verify",
+    "shasum -a 256 Chelaro-*.dmg",
     "gh release create",
     "apps/desktop/dist/*.dmg",
-    "apps/desktop/dist/*.zip",
-    "apps/desktop/dist/*.zip.blockmap",
-    "apps/desktop/dist/latest-mac.yml",
     "apps/desktop/dist/SHA256SUMS.txt",
+    "--notes-file",
   ]) {
     assert.match(workflow, new RegExp(escapeRegex(required)));
   }
   assert.ok(
-    workflow.indexOf("codesign --verify") < workflow.indexOf("gh release create"),
-    "signature verification must happen before publication",
+    workflow.indexOf("hdiutil verify") < workflow.indexOf("gh release create"),
+    "DMG verification must happen before publication",
   );
 });
 
-test("the automatic-update proof uses one synchronized higher product version", async () => {
+test("the free update release uses one synchronized higher product version", async () => {
   const packageFiles = [
     path.join(repositoryRoot, "package.json"),
     path.join(desktopRoot, "package.json"),
@@ -82,7 +77,7 @@ test("the automatic-update proof uses one synchronized higher product version", 
     JSON.parse(await readFile(file, "utf8"))
   ));
 
-  assert.deepEqual(packages.map(({ version }) => version), ["0.2.2", "0.2.2", "0.2.2"]);
+  assert.deepEqual(packages.map(({ version }) => version), ["0.3.0", "0.3.0", "0.3.0"]);
 });
 
 test("every pull request to main must increase the synchronized product version", async () => {
@@ -108,10 +103,16 @@ test("every pull request to main must increase the synchronized product version"
   assert.match(pullRequestTemplate, /product version is higher than `main`/);
 });
 
-test("the GitHub channel has no legacy S3 publishing entry point", async () => {
-  const rootPackage = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8"));
+test("the old automatic updater and S3 channel are absent", async () => {
+  const [rootPackage, desktopPackage, updateManager] = await Promise.all([
+    readFile(path.join(repositoryRoot, "package.json"), "utf8").then(JSON.parse),
+    readFile(path.join(desktopRoot, "package.json"), "utf8").then(JSON.parse),
+    readFile(path.join(desktopRoot, "src/update-manager.mjs"), "utf8"),
+  ]);
 
   assert.equal(rootPackage.scripts["publish:desktop-update"], undefined);
+  assert.equal(desktopPackage.dependencies["electron-updater"], undefined);
+  assert.doesNotMatch(updateManager, /quitAndInstall|autoUpdater/);
   await assert.rejects(
     access(path.join(repositoryRoot, "scripts/publish-desktop-update.sh")),
     { code: "ENOENT" },
@@ -120,12 +121,4 @@ test("the GitHub channel has no legacy S3 publishing entry point", async () => {
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function loadConfiguration({ signing }) {
-  const configurationPath = require.resolve("../electron-builder.config.cjs");
-  if (signing) process.env.FINANCE_OS_SIGN_BUILD = "1";
-  else delete process.env.FINANCE_OS_SIGN_BUILD;
-  delete require.cache[configurationPath];
-  return require(configurationPath);
 }
