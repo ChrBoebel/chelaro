@@ -1,9 +1,17 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from finance_os_api.assistant_conversation_schemas import (
+    AssistantProviderRuntimeResponse,
+    AssistantProviderRuntimeUpdate,
+    AssistantTurnComplete,
+    AssistantTurnFail,
+    AssistantTurnReserve,
+    AssistantTurnResponse,
+)
 from finance_os_api.auth import Actor, require_finance_assistant
 from finance_os_api.dependencies import get_database_session
 from finance_os_api.finance_assistant_schemas import (
@@ -29,6 +37,7 @@ from finance_os_api.schemas import (
     ReceivableDetailResource,
     ReceivableResource,
 )
+from finance_os_api.services.assistant_conversations import AssistantConversationService
 from finance_os_api.services.personal_finance import PersonalFinanceService
 
 router = APIRouter(
@@ -38,6 +47,106 @@ router = APIRouter(
 
 DatabaseSession = Annotated[AsyncSession, Depends(get_database_session)]
 FinanceAssistantActor = Annotated[Actor, Depends(require_finance_assistant)]
+
+
+@router.get(
+    "/conversations/{conversation_id}/runtime",
+    response_model=AssistantProviderRuntimeResponse,
+)
+async def get_conversation_runtime(
+    conversation_id: UUID,
+    session: DatabaseSession,
+    _actor: FinanceAssistantActor,
+) -> AssistantProviderRuntimeResponse:
+    data = await AssistantConversationService().get_runtime(session, conversation_id)
+    return AssistantProviderRuntimeResponse(data=data)
+
+
+@router.put(
+    "/conversations/{conversation_id}/runtime",
+    response_model=AssistantProviderRuntimeResponse,
+)
+async def bind_conversation_runtime(
+    conversation_id: UUID,
+    payload: AssistantProviderRuntimeUpdate,
+    session: DatabaseSession,
+    actor: FinanceAssistantActor,
+) -> AssistantProviderRuntimeResponse:
+    data = await AssistantConversationService().bind_runtime(
+        session,
+        conversation_id=conversation_id,
+        provider_thread_id=payload.provider_thread_id,
+        actor=actor,
+    )
+    return AssistantProviderRuntimeResponse(data=data)
+
+
+@router.post(
+    "/conversations/{conversation_id}/turns",
+    response_model=AssistantTurnResponse,
+    status_code=201,
+)
+async def reserve_conversation_turn(
+    conversation_id: UUID,
+    payload: AssistantTurnReserve,
+    response: Response,
+    session: DatabaseSession,
+    actor: FinanceAssistantActor,
+) -> AssistantTurnResponse:
+    data, replayed = await AssistantConversationService().reserve_turn(
+        session,
+        conversation_id=conversation_id,
+        turn_id=payload.turn_id,
+        prompt=payload.prompt,
+        actor=actor,
+    )
+    if replayed:
+        response.status_code = 200
+    return AssistantTurnResponse(data=data)
+
+
+@router.post(
+    "/conversations/{conversation_id}/turns/{turn_id}/complete",
+    response_model=AssistantTurnResponse,
+)
+async def complete_conversation_turn(
+    conversation_id: UUID,
+    turn_id: str,
+    payload: AssistantTurnComplete,
+    session: DatabaseSession,
+    actor: FinanceAssistantActor,
+) -> AssistantTurnResponse:
+    data = await AssistantConversationService().complete_turn(
+        session,
+        conversation_id=conversation_id,
+        turn_id=turn_id,
+        provider_turn_id=payload.provider_turn_id,
+        messages=payload.messages,
+        actor=actor,
+    )
+    return AssistantTurnResponse(data=data)
+
+
+@router.post(
+    "/conversations/{conversation_id}/turns/{turn_id}/fail",
+    response_model=AssistantTurnResponse,
+)
+async def fail_conversation_turn(
+    conversation_id: UUID,
+    turn_id: str,
+    payload: AssistantTurnFail,
+    session: DatabaseSession,
+    actor: FinanceAssistantActor,
+) -> AssistantTurnResponse:
+    data = await AssistantConversationService().fail_turn(
+        session,
+        conversation_id=conversation_id,
+        turn_id=turn_id,
+        status=payload.status,
+        error_code=payload.error_code,
+        actor=actor,
+    )
+    return AssistantTurnResponse(data=data)
 
 
 @router.get("/overview", response_model=FinanceAssistantDashboardResponse)
@@ -55,9 +164,7 @@ async def get_overview(
     return FinanceAssistantDashboardResponse(
         data=FinanceAssistantDashboard(
             period=FinanceAssistantDashboardPeriod.model_validate(dashboard.period.model_dump()),
-            summary=FinanceAssistantDashboardSummary.model_validate(
-                dashboard.summary.model_dump()
-            ),
+            summary=FinanceAssistantDashboardSummary.model_validate(dashboard.summary.model_dump()),
             cashflow=[
                 FinanceAssistantCashflowPoint.model_validate(item.model_dump())
                 for item in dashboard.cashflow[:12]

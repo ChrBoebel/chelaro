@@ -9,6 +9,7 @@ from finance_os_api.database import Database
 from finance_os_api.errors import register_exception_handlers
 from finance_os_api.middleware import install_http_middleware
 from finance_os_api.routes import (
+    assistant_conversations,
     banking,
     documents,
     finance_assistant,
@@ -56,6 +57,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     install_http_middleware(app)
     register_exception_handlers(app)
     app.include_router(system.router)
+    app.include_router(assistant_conversations.router)
     app.include_router(documents.router)
     app.include_router(workbooks.router)
     app.include_router(personal_finance.router)
