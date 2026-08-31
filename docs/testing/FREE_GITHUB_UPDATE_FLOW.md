@@ -21,17 +21,17 @@ without Chelaro silently replacing itself.
 
 ## Package and application E2E
 
-Before publishing `v0.3.0`:
+Before publishing `v0.3.1`:
 
 1. run the full quality, packaged Finance Assistant E2E, infrastructure gates, and
    `pnpm test:e2e:update-flow` for the isolated Electron update journey;
 2. package the real ARM64 DMG and verify it with `hdiutil verify`;
 3. inspect the bundled `CFBundleShortVersionString`;
 4. publish only from the protected tag workflow;
-5. manually install the `v0.3.0` bootstrap over an existing `0.2.x` test installation;
+5. manually install the `v0.3.1` bootstrap over an existing `0.2.x` test installation;
 6. confirm a corrupted synthetic test download cannot reach the DMG-open action;
 7. manually replace the app and verify version and synthetic-data continuity;
-8. publish a separately versioned stable follow-up and verify discovery from installed `0.3.0`.
+8. publish a separately versioned stable follow-up and verify discovery from installed `0.3.1`.
 
 The final cross-version GitHub download cannot run before the stable release exists. Its checklist
 therefore remains an explicit post-publication E2E gate rather than being simulated as production

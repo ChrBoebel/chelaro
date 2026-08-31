@@ -11,7 +11,24 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
-## [0.3.0] - 2026-08-31
+## [0.3.1] - 2026-08-31
+
+### Fixed
+
+- The protected release workflow now passes its version tag to the release-readiness gate without
+  an extra package-manager separator, allowing the first free DMG release to complete.
+
+### Changed
+
+- `0.3.1` is the one-time manual bootstrap required before `0.3.2` can exercise the new in-app
+  GitHub update journey.
+
+### Security
+
+- Publication still requires the reviewed `main` commit, synchronized versions, owner approval,
+  the complete quality gate, DMG verification, and a generated SHA-256 checksum.
+
+## [0.3.0] - Unpublished source version
 
 ### Added
 
@@ -24,8 +41,8 @@ All notable Chelaro changes are recorded here. The format follows
 
 - The protected release workflow now publishes one unsigned Apple-Silicon DMG plus
   `SHA256SUMS.txt` without Apple Developer Program credentials.
-- `0.3.0` becomes the one-time manual bootstrap required before later `0.3.x` releases can be
-  discovered through the new in-app flow.
+- The source version was superseded before publication by `0.3.1` after a release-workflow
+  argument bug was found during the pre-tag gate.
 - Updates replace the application only through the user's explicit Finder action; Chelaro no longer
   invokes the unsupported unsigned Squirrel in-place updater.
 
