@@ -11,7 +11,7 @@
   ohne Kontrolle über ihre Daten und Entscheidungen abzugeben.
 </p>
 
-<p align="center"><em>Öffentliche Source Preview · nicht produktionsreif · unsigned macOS-Downloads · German-first</em></p>
+<p align="center"><em>Öffentliche Source Preview · nicht produktionsreif · keine Apple Developer-ID · German-first</em></p>
 
 <p align="center">
   <a href="#aktueller-stand">Produkt</a> ·
@@ -32,7 +32,7 @@ Finanzdaten entstehen erst durch deterministische Validierung oder eine bewusste
 > **Projektstatus:** Dies ist eine öffentliche, experimentelle Source Preview. Der Quellcode steht
 > unter der PolyForm Noncommercial License 1.0.0; kommerzielle Nutzung erfordert eine separate
 > schriftliche Lizenz. Das Repository ist **source-available und nicht Open Source**. Es gibt keine
-> ausschließlich experimentelle unsigned Downloads und keine Apple-signierten Builds, Support-
+> ausschließlich experimentelle ad-hoc signierte Downloads und keine Apple Developer-ID-Builds, Support-
 > oder Produktionszusagen. Dieses
 > Repository ist die einzige aktive Chelaro-Codebasis; der Arbeitsablauf ist unter
 > [Repository Operations](docs/operations/REPOSITORY.md) dokumentiert.
@@ -190,7 +190,7 @@ Dienste und öffnet Chelaro in einem isolierten Electron-Fenster:
 pnpm dev:desktop
 ```
 
-Der geschützte GitHub-Releasepfad kann eine experimentelle unsigned Apple-Silicon-DMG zusammen mit
+Der geschützte GitHub-Releasepfad kann eine experimentelle ad-hoc signierte Apple-Silicon-DMG zusammen mit
 einer SHA-256-Prüfsummendatei veröffentlichen. Das ist kein Apple-signierter oder notarisierter
 Produktionsbuild; die kostenlose manuelle Installation und ihre Gatekeeper-Grenze sind unten
 dokumentiert.
@@ -222,8 +222,8 @@ und stellt diesen Ablauf nicht als automatisches oder von Apple verifiziertes Up
 Release-, Prüf- und Rollback-Ablauf steht im
 [macOS Release and Update Process](docs/releases/RELEASE_PROCESS.md).
 
-Bestehende `0.2.x`-Installationen besitzen diesen kostenlosen Prüfer noch nicht. `0.3.2` ist deshalb
-die einmalig manuell zu installierende Basis; erst sie kann ein späteres `0.3.3` in der App
+Bestehende `0.2.x`-Installationen besitzen diesen kostenlosen Prüfer noch nicht. `0.3.4` ist deshalb
+die einmalig manuell zu installierende Basis; erst sie kann ein späteres `0.3.5` in der App
 ankündigen und herunterladen.
 
 ## Sicherheit und Datenintegrität

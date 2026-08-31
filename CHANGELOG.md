@@ -11,12 +11,32 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.3.4] - 2026-08-31
+
+### Fixed
+
+- The entire macOS application bundle, including nested helpers, frameworks, and resources, is now
+  ad-hoc signed before DMG creation instead of retaining only Electron's incomplete linker signature.
+- The protected release fails unless both the built app and the app inside its DMG satisfy strict,
+  deep code-integrity verification.
+
+### Changed
+
+- `0.3.4` replaces withdrawn `0.3.2` as the one-time manual bootstrap; the separately versioned
+  in-app update proof moves to `0.3.5`.
+
+### Security
+
+- Ad-hoc signing seals bundle integrity at no cost but supplies no Apple identity or notarization;
+  the user must still approve the first launch through Finder's explicit right-click → Open flow.
+
 ## [0.3.3] - 2026-08-31
 
 ### Changed
 
 - Published a separately versioned stable update target for the real `0.3.2` in-app GitHub update
   journey.
+- Withdrew the release after its bootstrap bundle failed the real Gatekeeper launch test.
 
 ### Security
 

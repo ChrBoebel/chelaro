@@ -55,12 +55,15 @@ jobs:
           pnpm release:check "$GITHUB_REF_NAME"
       - name: Verify release quality
         run: pnpm quality
-      - name: Build unsigned installer
+      - name: Build ad-hoc signed installer
         run: pnpm package:desktop
       - name: Verify installer image and bundled version
         run: |
           version="$(node -p "require('./apps/desktop/package.json').version")"
-          test "$(defaults read "$PWD/apps/desktop/dist/mac-arm64/Chelaro.app/Contents/Info" CFBundleShortVersionString)" = "$version"
+          app_path="$PWD/apps/desktop/dist/mac-arm64/Chelaro.app"
+          test "$(defaults read "$app_path/Contents/Info" CFBundleShortVersionString)" = "$version"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          codesign -dv --verbose=2 "$app_path" 2>&1 | grep -F "Signature=adhoc"
           hdiutil verify "apps/desktop/dist/Chelaro-$version-arm64.dmg"
       - name: Create artifact checksums
         run: |

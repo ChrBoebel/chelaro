@@ -1,6 +1,6 @@
 # macOS Release and Update Process
 
-Chelaro publishes a free, unsigned Apple-Silicon DMG through the public GitHub repository. The
+Chelaro publishes a free, ad-hoc signed Apple-Silicon DMG through the public GitHub repository. The
 desktop application checks GitHub directly, announces a higher stable Semantic Version, downloads
 the DMG after an explicit user action, verifies it against `SHA256SUMS.txt`, and opens it. The user
 remains responsible for replacing the application in the macOS `Programme` folder.
@@ -12,12 +12,12 @@ service.
 ## Bootstrap boundary
 
 Versions `0.2.x` contain the superseded Squirrel prototype and cannot discover this manual update
-channel. `0.3.2` is therefore a one-time manual bootstrap: download its DMG from the GitHub Release,
-independently compare its checksum, and replace the old application. From installed `0.3.2`
-onward, Chelaro can announce and download a separately published higher version such as `0.3.3`.
+channel. `0.3.4` is therefore a one-time manual bootstrap: download its DMG from the GitHub Release,
+independently compare its checksum, and replace the old application. From installed `0.3.4`
+onward, Chelaro can announce and download a separately published higher version such as `0.3.5`.
 
 Never represent the synthetic E2E or an installed `0.2.x` build as proof of a real cross-version
-GitHub update. That proof requires both the published `0.3.2` baseline and a later immutable stable
+GitHub update. That proof requires both the published `0.3.4` baseline and a later immutable stable
 release.
 
 ## Trust boundary
@@ -51,7 +51,7 @@ reviewed tag workflow remain security controls.
 5. Chelaro downloads into the user's Downloads folder and displays progress.
 6. Chelaro enables **DMG öffnen** only after size, SHA-256, and macOS-quarantine checks pass.
 7. The user opens the DMG, drags Chelaro to `Programme`, and confirms replacement.
-8. If Gatekeeper blocks the unsigned build, the user explicitly selects Finder right-click →
+8. If Gatekeeper blocks the build without Developer-ID identity, the user explicitly selects Finder right-click →
    **Öffnen**, or **Datenschutz & Sicherheit → Dennoch öffnen**.
 9. The user starts Chelaro again and can confirm the new version in the macOS About panel.
 
@@ -121,8 +121,8 @@ The workflow then:
 2. proves tag, synchronized package versions, changelog, and release notes agree;
 3. runs the complete repository quality gate;
 4. builds the embedded API, Web, and Agent Host runtimes;
-5. creates the unsigned Apple-Silicon DMG;
-6. verifies the DMG image and bundled application version;
+5. ad-hoc signs the complete application bundle and creates the Apple-Silicon DMG;
+6. strictly verifies bundle integrity, the DMG image, and bundled application version;
 7. creates `SHA256SUMS.txt` and preserves both files as workflow evidence;
 8. publishes both immutable assets in one stable GitHub Release using the reviewed release note.
 
@@ -133,8 +133,8 @@ the exact asset names and will reject duplicates or mismatches.
 
 - Confirm the Release is stable/latest and reports the expected `vX.Y.Z` tag.
 - Independently compare `shasum -a 256` for the DMG with `SHA256SUMS.txt`.
-- For the `0.3.2` bootstrap, install the DMG manually over the existing `0.2.x` application.
-- For `0.3.3` and later, start the previous installed `0.3.x` version and confirm the update control
+- For the `0.3.4` bootstrap, install the DMG manually over the existing `0.2.x` application.
+- For `0.3.5` and later, start the previous installed `0.3.x` version and confirm the update control
   announces `X.Y.Z`.
 - Exercise download, verification, DMG opening, manual replacement, and Gatekeeper instructions.
 - Confirm the About panel reports the new version after restart.

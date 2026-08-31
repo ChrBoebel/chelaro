@@ -19,7 +19,7 @@ test("the desktop client uses the reviewed public GitHub release channel", () =>
   });
 });
 
-test("free packaging creates one unsigned Apple Silicon DMG", () => {
+test("free packaging creates one ad-hoc signed Apple Silicon DMG without Apple identity", () => {
   const configurationPath = require.resolve("../electron-builder.config.cjs");
   delete require.cache[configurationPath];
   const configuration = require(configurationPath);
@@ -27,6 +27,7 @@ test("free packaging creates one unsigned Apple Silicon DMG", () => {
   assert.equal(configuration.mac.identity, null);
   assert.equal(configuration.mac.hardenedRuntime, false);
   assert.equal(configuration.mac.notarize, false);
+  assert.equal(typeof configuration.afterPack, "function");
   assert.deepEqual(configuration.mac.target, [{ target: "dmg", arch: ["arm64"] }]);
   assert.equal(configuration.publish, undefined);
 });
@@ -41,7 +42,6 @@ test("GitHub publishes the DMG and checksum without Apple credentials", async ()
     "MACOS_CERTIFICATE",
     "APPLE_API_",
     "CSC_LINK",
-    "codesign --verify",
     "xcrun stapler",
     "latest-mac.yml",
     "*.zip.blockmap",
@@ -54,6 +54,8 @@ test("GitHub publishes the DMG and checksum without Apple credentials", async ()
     "pnpm quality",
     "pnpm release:check \"$GITHUB_REF_NAME\"",
     "pnpm package:desktop",
+    "codesign --verify --deep --strict",
+    "Signature=adhoc",
     "hdiutil verify",
     "shasum -a 256 Chelaro-*.dmg",
     "gh release create",
@@ -64,8 +66,9 @@ test("GitHub publishes the DMG and checksum without Apple credentials", async ()
     assert.match(workflow, new RegExp(escapeRegex(required)));
   }
   assert.ok(
-    workflow.indexOf("hdiutil verify") < workflow.indexOf("gh release create"),
-    "DMG verification must happen before publication",
+    workflow.indexOf("codesign --verify") < workflow.indexOf("gh release create") &&
+      workflow.indexOf("hdiutil verify") < workflow.indexOf("gh release create"),
+    "bundle and DMG verification must happen before publication",
   );
 });
 
@@ -79,7 +82,7 @@ test("the free update release uses one synchronized higher product version", asy
     JSON.parse(await readFile(file, "utf8"))
   ));
 
-  assert.deepEqual(packages.map(({ version }) => version), ["0.3.3", "0.3.3", "0.3.3"]);
+  assert.deepEqual(packages.map(({ version }) => version), ["0.3.4", "0.3.4", "0.3.4"]);
 });
 
 test("every pull request to main must increase the synchronized product version", async () => {
