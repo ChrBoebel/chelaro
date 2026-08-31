@@ -8,6 +8,7 @@ import {
 } from "../src/finance-tool-contract.js";
 import {
   FINANCE_DISABLED_CODEX_FEATURES,
+  FINANCE_ENABLED_CODEX_FEATURES,
   FinanceThreadContractError,
   assertFinanceThreadStartParams,
   buildFinanceInitializeParams,
@@ -42,12 +43,20 @@ test("finance thread has no environment and exactly eight immutable direct finan
   assert.doesNotThrow(() => assertFinanceThreadStartParams(params));
 });
 
-test("finance thread disables every non-finance capability and contains finance-only instructions", () => {
+test("finance thread enables only the isolated finance tool router and contains finance-only instructions", () => {
   const params = buildFinanceThreadStartParams();
   const config = params.config as Record<string, unknown>;
   const features = config.features as Record<string, unknown>;
-  assert.deepEqual(Object.keys(features).sort(), [...FINANCE_DISABLED_CODEX_FEATURES].sort());
-  assert.equal(Object.values(features).every((value) => value === false), true);
+  assert.deepEqual(
+    Object.keys(features).sort(),
+    [...FINANCE_DISABLED_CODEX_FEATURES, ...FINANCE_ENABLED_CODEX_FEATURES].sort(),
+  );
+  assert.deepEqual(FINANCE_ENABLED_CODEX_FEATURES, ["code_mode_host"]);
+  assert.equal(features.code_mode_host, true);
+  assert.equal(
+    FINANCE_DISABLED_CODEX_FEATURES.every((name) => features[name] === false),
+    true,
+  );
   assert.equal(config.web_search, "disabled");
   assert.deepEqual(config.mcp_servers, {});
   assert.deepEqual(config.orchestrator, {
@@ -65,9 +74,10 @@ test("finance thread disables every non-finance capability and contains finance-
   assert.match(params.baseInstructions ?? "", /kein Coding-Agent/);
   assert.match(params.baseInstructions ?? "", /untrusted Daten/);
   assert.match(params.baseInstructions ?? "", /prüfpflichtige Vorschläge/);
-  assert.match(params.developerInstructions ?? "", /direkte Werkzeugaufrufe/);
-  assert.match(params.developerInstructions ?? "", /Programmatic Tool Calling/);
-  assert.match(params.developerInstructions ?? "", /exec/);
+  assert.match(params.developerInstructions ?? "", /tools\.finance_/);
+  assert.match(params.developerInstructions ?? "", /keine Shell/);
+  assert.match(params.developerInstructions ?? "", /keine Datei/);
+  assert.match(params.developerInstructions ?? "", /kein Netzwerk/);
   assert.match(params.developerInstructions ?? "", /ohne zusätzliche Bestätigung/);
   assert.match(params.developerInstructions ?? "", /optionales Fälligkeitsdatum/);
   assert.match(params.developerInstructions ?? "", /exakt aus der Nutzereingabe/);

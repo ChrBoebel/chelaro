@@ -13,6 +13,8 @@ test("codex process: disables global hooks and plugin features before App Server
   assert.equal(argumentsList.includes("features.hooks=false"), true);
   assert.equal(argumentsList.includes("features.plugins=false"), true);
   assert.equal(argumentsList.includes("skills.include_instructions=false"), true);
+  assert.equal(argumentsList.includes("features.code_mode_host=true"), true);
+  assert.equal(argumentsList.includes("features.code_mode_host=false"), false);
 });
 
 function fixture(options: { badIdentity?: boolean; onFatalError?: (error: Error) => void } = {}) {
