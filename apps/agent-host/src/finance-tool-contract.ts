@@ -3,10 +3,8 @@ import { createHash } from "node:crypto";
 import Ajv, { type AnySchema, type ErrorObject, type ValidateFunction } from "ajv";
 
 import type { JsonValue } from "../generated/codex/ts/serde_json/JsonValue.js";
-import type { DynamicToolNamespaceTool } from "../generated/codex/ts/v2/DynamicToolNamespaceTool.js";
 import type { DynamicToolSpec } from "../generated/codex/ts/v2/DynamicToolSpec.js";
 
-export const FINANCE_TOOL_NAMESPACE = "chelaro_finance";
 export const MAX_FINANCE_TOOL_ARGUMENT_BYTES = 16 * 1024;
 
 export const FINANCE_TOOL_NAMES = [
@@ -155,21 +153,11 @@ const toolDefinitions = [
       ],
     ),
   ),
-] as const satisfies readonly DynamicToolNamespaceTool[];
+] as const satisfies readonly DynamicToolSpec[];
 
-const namespaceTools: DynamicToolNamespaceTool[] = toolDefinitions.map((definition) =>
-  deepFreeze(definition),
+export const FINANCE_DYNAMIC_TOOLS: readonly DynamicToolSpec[] = deepFreeze(
+  toolDefinitions.map((definition) => deepFreeze(definition)),
 );
-deepFreeze(namespaceTools);
-
-const financeNamespace: DynamicToolSpec = deepFreeze({
-    type: "namespace" as const,
-    name: FINANCE_TOOL_NAMESPACE,
-    description: "Eng begrenzte Chelaro-Werkzeuge zum Lesen und Vorschlagen persönlicher Finanzen.",
-    tools: namespaceTools,
-});
-
-export const FINANCE_DYNAMIC_TOOLS: readonly [DynamicToolSpec] = deepFreeze([financeNamespace]);
 export const FINANCE_TOOL_CONTRACT_DIGEST = digestTools(FINANCE_DYNAMIC_TOOLS);
 
 const ajv = new Ajv({ allErrors: false, strict: true });
@@ -185,7 +173,7 @@ export function validateFinanceToolCall(
   name: string,
   argumentsValue: JsonValue,
 ): { name: FinanceToolName; arguments: Record<string, JsonValue> } {
-  if (namespace !== FINANCE_TOOL_NAMESPACE || !isFinanceToolName(name)) {
+  if (namespace !== null || !isFinanceToolName(name)) {
     throw new FinanceToolContractError("unknown_tool", "Finance tool is not allowlisted.");
   }
   const encoded = JSON.stringify(argumentsValue);
@@ -230,7 +218,7 @@ function tool(
   name: FinanceToolName,
   description: string,
   inputSchema: JsonSchema,
-): DynamicToolNamespaceTool & { name: FinanceToolName } {
+): Extract<DynamicToolSpec, { type: "function" }> & { name: FinanceToolName } {
   return { type: "function", name, description, inputSchema };
 }
 

@@ -27,7 +27,7 @@ test("finance request handler delegates the exact dynamic tool call", async () =
     threadId: "thread",
     turnId: "turn",
     callId: "call",
-    namespace: "chelaro_finance",
+    namespace: null,
     tool: "finance_get_overview",
     arguments: {},
   };

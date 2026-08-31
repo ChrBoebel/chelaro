@@ -26,7 +26,7 @@ flowchart TB
     Desktop -->|authenticated parent IPC| Host[Finance Agent Host]
     Next -->|per-launch gateway capability| Host
     Host -->|dedicated finance-assistant token| API
-    Host -->|eight tools; no execution environment| Codex[Supported system Codex App Server]
+    Host -->|eight tools + isolated router; no environment| Codex[Supported system Codex App Server]
     Upload[Untrusted document bytes] --> API
     API --> DB[(Canonical database)]
     API --> Files[(Original document store)]
@@ -45,7 +45,7 @@ messages are untrusted input.
 | Path traversal through filenames or storage keys | Basename normalization; content-addressed keys; resolved-path containment check | Continue fuzzing unusual Unicode and platform paths |
 | Silent alteration of an original | Immutable content-addressed storage; derived metadata stored separately | Add periodic integrity verification and backup manifests |
 | Assistant writes canonical financial data | Dedicated least-privilege principal; owner-only routes reject it; four write tools create reviewable proposals; existing-record changes remain version-bound; approval/rejection remains owner-only and audited | Continue adding proposal-action-specific regression tests |
-| Model-driven tool exceeds finance scope | Exact eight-tool provider manifest; no execution environment; no shell/files/web/browser/MCP/plugins; bounded schemas, call binding, turn/session budgets, and consent checks before and after every call | The trusted same-user App Server remains residual risk; packaged integration requires a new review |
+| Model-driven tool exceeds finance scope | Exact eight-function dynamic-tool registry; no execution environment; GPT-5.6's isolated Code Mode Host can route only to that registry and has no Node/shell/files/processes/network/imports; MCP/plugins remain disabled; bounded schemas, call binding, turn/session budgets, and consent checks before and after every call | The trusted same-user App Server and its JavaScript router remain residual risk; future CLI/model changes require a new real-model review |
 | Finance data is sent without current consent | Append-only owner-only consent journal; notice/version/category binding; `revoke_pending` is fsynced before interrupt and further transfers fail closed | Provider-side retention is governed outside Chelaro and must remain disclosed |
 | Assistant capability leaks to Codex or renderer | Generated per launch; delivered to Host post-start by inherited IPC; removed from child environments; different gateway token held only by Electron and Next.js | Same-user process compromise remains outside logical token separation |
 | Replaced or reconfigured Codex control plane | Direct executable discovery through absolute search directories without a shell; exact compatible version; generated protocol validation; bounded `config/read`; every inherited MCP ID disabled per thread; explicit feature/skill disables; exact provider-manifest test; fail-closed server-request policy | The compatible system App Server and same-user configuration remain trusted; Chelaro cannot provide an OS boundary around them |

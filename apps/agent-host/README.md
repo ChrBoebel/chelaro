@@ -2,7 +2,9 @@
 
 Der Agent Host verbindet den einwilligungsgebundenen Finanzassistenten mit dem Codex App
 Server. Er stellt ausschließlich die begrenzten Chelaro-Finanzwerkzeuge bereit – keine Shell,
-Dateien, Browser-, Web- oder Coding-Werkzeuge.
+Dateien, Prozesse, Browser-, Web- oder Netzwerk-Werkzeuge. Da GPT-5.6 Werkzeugaufrufe über Code
+Mode routet, ist dessen isolierter Host aktiv; sein `tools`-Objekt enthält ausschließlich die acht
+Finanzfunktionen und hat keinen Node-, Shell-, Datei- oder Netzwerkzugriff.
 
 ## Autoritätsmodell
 

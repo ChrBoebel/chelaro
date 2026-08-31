@@ -4,7 +4,8 @@
 
 Accepted for Phase 0 on 2026-08-28 after independent senior review. Later phases remain blocked
 until the Phase-0 gates in the reviewed implementation plan pass. Authentication, `CODEX_HOME`,
-and desktop runtime integration are superseded by ADR 0011.
+and desktop runtime integration are superseded by ADR 0011. The Code Mode routing decision is
+amended by ADR 0012.
 
 ## Context
 
@@ -27,11 +28,11 @@ calls. It is a local control-plane dependency, not a financial system of record.
   user's global Codex configuration, history, skills, plugins, hooks, apps, or MCP servers.
 - Start the thread with no execution environment (`environments: []`) and an empty app-owned
   directory. Disable shell, unified execution, patch, file/image viewing, JavaScript REPL, network,
-  web search, browser/computer use, collaboration, code mode, MCP, apps, skills, plugins, hooks, and
+  web search, browser/computer use, collaboration, MCP, apps, skills, plugins, hooks, and
   user-added tools in the effective pinned configuration. Implementation stops if the provider-edge
   tool manifest contains anything except Chelaro's eight finance tools or if an adversarial real
   turn can execute a built-in tool.
-- Give Codex only an app-owned finance tool namespace. The first release contains bounded reads for
+- Give Codex only eight app-owned finance functions. The first release contains bounded reads for
   the dashboard, transactions, receivables, and one receivable detail, plus proposal creation for
   new receivables, receivable edits, payment records, and payment reversals.
 - Implement each tool as an explicit schema and a host-side handler. Unknown tools, extra input
@@ -51,7 +52,8 @@ calls. It is a local control-plane dependency, not a financial system of record.
   data fields.
 - Never expose original document bytes or OCR text, banking credentials, database access, owner
   credentials, local filesystem access, bank transfers, payment execution, tax/legal advice tools,
-  arbitrary HTTP, arbitrary SQL, or generic code execution.
+  arbitrary HTTP, arbitrary SQL, or host execution. ADR 0012 permits only the isolated JavaScript
+  router required by GPT-5.6 to call the eight finance functions.
 - External provider use is off by default. The owner must explicitly consent before the first
   Codex login or finance message, and the UI must explain that selected typed financial data and
   chat messages are sent to OpenAI.

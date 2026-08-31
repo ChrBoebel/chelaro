@@ -111,7 +111,8 @@ Die erste durchgängige Vertrauensschicht ist implementiert:
 - Vorbereitung einer lesenden FinTS-Verbindung ohne Speicherung von PIN oder TAN;
 - persönlicher Finanzassistent mit expliziter Einwilligung, ChatGPT-Geräteanmeldung und flüchtigem
   Streaming-Chat;
-- exakt acht typisierte Finanzwerkzeuge ohne Shell, Dateien, Web, Browser oder Coding-Funktionen;
+- exakt acht typisierte Finanzwerkzeuge ohne Shell-, Datei-, Prozess-, Web-, Browser- oder
+  Netzwerkzugriff; GPT-5.6 nutzt nur einen isolierten JavaScript-Router, um diese Werkzeuge aufzurufen;
 - KI-Änderungen ausschließlich als prüfbare Vorschläge; bestehende Daten bleiben versionsgebunden;
 - Electron-Source-Runtime für lokale Entwicklung auf macOS;
 - vorbereiteter GitHub-Release-Updatekanal mit explizitem Download und Installieren in der App.
@@ -132,10 +133,11 @@ werden.
 | [`packages/agent-storage`](packages/agent-storage/README.md) | TypeScript | Historische Isolationsexperimente; nicht Teil des Finanzassistenten |
 | [`infra/docker`](infra/docker/README.md) | Docker Compose | Reproduzierbare lokale Infrastruktur |
 
-Der source-run Finanzassistent ist Bestandteil von `main`: Electron startet den Host, übergibt sein
-Least-Privilege-Token erst nach Start per Parent-IPC und verbindet die Oberfläche über einen
-separaten Same-Origin-Gateway-Proxy. Codex erhält weder Shell, Dateien, Webzugriff noch Coding-
-Werkzeuge. Seine vier schreibenden Finanzwerkzeuge erzeugen ausschließlich nicht-kanonische,
+Der Finanzassistent ist Bestandteil von Source- und paketierter Runtime: Electron startet den Host,
+übergibt sein Least-Privilege-Token erst nach Start per Parent-IPC und verbindet die Oberfläche über
+einen separaten Same-Origin-Gateway-Proxy. Codex erhält weder Shell, Dateien, Webzugriff noch
+Coding-Werkzeuge außerhalb des isolierten Finanzwerkzeug-Routers. Seine vier schreibenden
+Finanzwerkzeuge erzeugen ausschließlich nicht-kanonische,
 prüfpflichtige Vorschläge; Änderungen bestehender Daten bleiben versionsgebunden. Die Freigabe im
 signierten Paket ist noch nicht abgeschlossen. Der REST-Zugriff für lokale externe Agents bleibt
 davon getrennt.

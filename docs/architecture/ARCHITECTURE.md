@@ -17,7 +17,7 @@ flowchart LR
     Desktop -->|authenticated parent IPC| AgentHost[Finance Agent Host]
     Web -->|same-origin proxy + per-launch capability| AgentHost
     AgentHost -->|eight bounded finance tools| API
-    AgentHost -->|no execution environment| Codex[Pinned Codex App Server]
+    AgentHost -->|eight tools + isolated router; no environment| Codex[Pinned Codex App Server]
     API --> DB[(PostgreSQL or SQLite)]
     API --> Originals[(Immutable document store)]
     Desktop -->|explicit check and install| Updates[Signed HTTPS update channel]
@@ -34,7 +34,7 @@ compatibility with earlier builds.
 | Web interface | `apps/web` | Human review, same-origin mutations, local API proxy | Owner-facing |
 | Domain API | `apps/api` | Authorization, validation, canonical rules, persistence, audit events | Canonical boundary |
 | Desktop shell | `apps/desktop` | Isolated Electron window, local runtime, signed updates | Local launcher |
-| Finance Agent Host | `apps/agent-host` | Verify and drive pinned Codex; enforce consent, session binding, budgets, and the exact eight-tool finance namespace | Trusted local control plane |
+| Finance Agent Host | `apps/agent-host` | Verify and drive pinned Codex; enforce consent, session binding, budgets, and the exact eight-function finance surface | Trusted local control plane |
 | Document store | Configured local path | Content-addressed PDF, PNG, and JPEG originals | Immutable evidence |
 | Database | PostgreSQL or SQLite | Financial records, proposals, versions, audit history | Canonical state |
 | Docker infrastructure | `infra/docker` | Reproducible development PostgreSQL | Development only |
@@ -83,9 +83,12 @@ reads or mutates the credential files and does not implement login or logout. Mi
 Codex installations degrade only the assistant. Before thread creation the Host uses `config/read`
 to enumerate bounded MCP identifiers and disables each inherited server in the thread override;
 the configuration is neither returned to the UI nor persisted. The finance thread still has no execution
-environments and exposes exactly eight dynamic finance tools. Those tools expose bounded typed
+environment and exposes exactly eight dynamic finance functions. GPT-5.6 is code-mode-only for tool
+use, so Chelaro enables the pinned isolated Code Mode Host solely as a router to those functions.
+The router has no Node, shell, file, process, import, environment-variable, or network capability.
+Those tools expose bounded typed
 projections and proposal creation only. They never expose original documents, OCR, bank access,
-owner mutations, arbitrary HTTP, files, shell, code execution, browser control, MCP, or plugins.
+owner mutations, arbitrary HTTP, files, shell, browser control, MCP, or plugins.
 Every call is bound to the active session, turn, call ID, consent version, and budget. Typed finance
 fields remain untrusted prompt content. The App Server itself remains a trusted same-user control-
 plane dependency; this residual risk and the shared-login boundary are accepted in ADR 0011.
@@ -131,9 +134,9 @@ See [Release Process](../releases/RELEASE_PROCESS.md) and
 
 - automated backup and tested restore are not implemented;
 - local database encryption and Keychain-backed credential storage are not implemented;
-- OCR and the packaged Finance Assistant integration are still in development;
-- the implemented Finance Assistant is source-run only on the exact verified macOS 15.6 arm64
-  platform, is disabled in packaged builds, and remains fail-closed elsewhere;
+- OCR is still in development;
+- the Finance Assistant is verified in a local unsigned macOS 15.6 arm64 package and remains
+  fail-closed without the exact supported Codex CLI; a signed public package is still pending;
 - public CI guarantees and any future signed release would require a separate release decision,
   working automation, and dedicated release secrets;
 - a compromised local operating-system account is outside the current protection boundary.

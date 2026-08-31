@@ -80,7 +80,7 @@ test("finance chat stream: ignores non-message completion items", () => {
       contentItems: null,
       durationMs: 1,
       id: "tool_1",
-      namespace: "chelaro_finance",
+      namespace: null,
       status: "completed",
       success: true,
       tool: "finance_get_overview",

@@ -6,6 +6,7 @@ import type { ServerRequest } from "../generated/codex/ts/ServerRequest.js";
 import {
   buildFinanceInitializeParams,
   FINANCE_DISABLED_CODEX_FEATURES,
+  FINANCE_ENABLED_CODEX_FEATURES,
 } from "./finance-thread-contract.js";
 import { assertSupportedCodexBinary, buildChildEnvironment } from "./isolation.js";
 import {
@@ -33,6 +34,7 @@ export function buildCodexAppServerArguments(): string[] {
     "skills.bundled.enabled=false",
     "skills.include_instructions=false",
     ...FINANCE_DISABLED_CODEX_FEATURES.map((feature) => `features.${feature}=false`),
+    ...FINANCE_ENABLED_CODEX_FEATURES.map((feature) => `features.${feature}=true`),
   ];
   return [
     "app-server",

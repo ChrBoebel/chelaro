@@ -8,6 +8,7 @@ import {
 } from "../src/finance-tool-contract.js";
 import {
   FINANCE_DISABLED_CODEX_FEATURES,
+  FINANCE_ENABLED_CODEX_FEATURES,
   FinanceThreadContractError,
   assertFinanceThreadStartParams,
   buildFinanceInitializeParams,
@@ -29,23 +30,33 @@ test("finance thread opts into only the required experimental API", () => {
   assert.throws(() => buildFinanceInitializeParams("development"), FinanceThreadContractError);
 });
 
-test("finance thread has no environment and exactly the immutable finance namespace", () => {
+test("finance thread has no environment and exactly eight immutable direct finance tools", () => {
   const params = buildFinanceThreadStartParams("gpt-5.6");
   assert.deepEqual(params.environments, []);
   assert.equal(params.dynamicTools, FINANCE_DYNAMIC_TOOLS);
+  assert.equal(params.dynamicTools.length, 8);
+  assert.equal(params.dynamicTools.every((tool) => tool.type === "function"), true);
   assert.equal(Object.isFrozen(params.dynamicTools), true);
   assert.equal(Object.isFrozen(params.dynamicTools[0]), true);
-  assert.equal(Object.isFrozen(params.dynamicTools[0]?.type === "namespace" ? params.dynamicTools[0].tools[0]?.inputSchema : null), true);
+  assert.equal(Object.isFrozen(params.dynamicTools[0]?.type === "function" ? params.dynamicTools[0].inputSchema : null), true);
   assert.equal(financeToolContractDigest(), FINANCE_TOOL_CONTRACT_DIGEST);
   assert.doesNotThrow(() => assertFinanceThreadStartParams(params));
 });
 
-test("finance thread disables every non-finance capability and contains finance-only instructions", () => {
+test("finance thread enables only the isolated finance tool router and contains finance-only instructions", () => {
   const params = buildFinanceThreadStartParams();
   const config = params.config as Record<string, unknown>;
   const features = config.features as Record<string, unknown>;
-  assert.deepEqual(Object.keys(features).sort(), [...FINANCE_DISABLED_CODEX_FEATURES].sort());
-  assert.equal(Object.values(features).every((value) => value === false), true);
+  assert.deepEqual(
+    Object.keys(features).sort(),
+    [...FINANCE_DISABLED_CODEX_FEATURES, ...FINANCE_ENABLED_CODEX_FEATURES].sort(),
+  );
+  assert.deepEqual(FINANCE_ENABLED_CODEX_FEATURES, ["code_mode_host"]);
+  assert.equal(features.code_mode_host, true);
+  assert.equal(
+    FINANCE_DISABLED_CODEX_FEATURES.every((name) => features[name] === false),
+    true,
+  );
   assert.equal(config.web_search, "disabled");
   assert.deepEqual(config.mcp_servers, {});
   assert.deepEqual(config.orchestrator, {
@@ -63,6 +74,12 @@ test("finance thread disables every non-finance capability and contains finance-
   assert.match(params.baseInstructions ?? "", /kein Coding-Agent/);
   assert.match(params.baseInstructions ?? "", /untrusted Daten/);
   assert.match(params.baseInstructions ?? "", /prüfpflichtige Vorschläge/);
+  assert.match(params.developerInstructions ?? "", /tools\.finance_/);
+  assert.match(params.developerInstructions ?? "", /keine Shell/);
+  assert.match(params.developerInstructions ?? "", /keine Datei/);
+  assert.match(params.developerInstructions ?? "", /kein Netzwerk/);
+  assert.match(params.developerInstructions ?? "", /ohne zusätzliche Bestätigung/);
+  assert.match(params.developerInstructions ?? "", /optionales Fälligkeitsdatum/);
   assert.match(params.developerInstructions ?? "", /exakt aus der Nutzereingabe/);
   assert.match(params.developerInstructions ?? "", /ohne Markdown-Markierungen/);
 });

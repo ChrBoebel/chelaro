@@ -4,7 +4,6 @@ import { test } from "node:test";
 import {
   FINANCE_DYNAMIC_TOOLS,
   FINANCE_TOOL_NAMES,
-  FINANCE_TOOL_NAMESPACE,
   FinanceToolContractError,
   financeToolContractDigest,
   validateFinanceToolCall,
@@ -12,22 +11,20 @@ import {
 
 const receivableId = "123e4567-e89b-42d3-a456-426614174000";
 
-test("publishes exactly the eight bounded finance tools", () => {
-  assert.equal(FINANCE_DYNAMIC_TOOLS.length, 1);
-  const namespace = FINANCE_DYNAMIC_TOOLS[0];
-  assert.equal(namespace.type, "namespace");
-  if (namespace.type !== "namespace") assert.fail("Expected finance namespace");
-  assert.equal(namespace.name, FINANCE_TOOL_NAMESPACE);
-  assert.deepEqual(namespace.tools.map(({ name }) => name), FINANCE_TOOL_NAMES);
+test("publishes exactly eight directly callable bounded finance tools", () => {
+  assert.equal(FINANCE_DYNAMIC_TOOLS.length, FINANCE_TOOL_NAMES.length);
+  assert.deepEqual(FINANCE_DYNAMIC_TOOLS.map(({ name }) => name), FINANCE_TOOL_NAMES);
   assert.match(financeToolContractDigest(), /^[a-f0-9]{64}$/);
-  for (const definition of namespace.tools) {
+  for (const definition of FINANCE_DYNAMIC_TOOLS) {
+    assert.equal(definition.type, "function");
+    if (definition.type !== "function") assert.fail("Expected a directly callable finance function");
     assert.equal((definition.inputSchema as { additionalProperties?: boolean }).additionalProperties, false);
   }
 });
 
 test("accepts valid read and proposal arguments", () => {
   assert.deepEqual(
-    validateFinanceToolCall(FINANCE_TOOL_NAMESPACE, "finance_get_overview", {
+    validateFinanceToolCall(null, "finance_get_overview", {
       currency: "EUR",
       period: "2026-08",
     }),
@@ -37,7 +34,7 @@ test("accepts valid read and proposal arguments", () => {
     },
   );
   assert.equal(
-    validateFinanceToolCall(FINANCE_TOOL_NAMESPACE, "finance_propose_receivable_create", {
+    validateFinanceToolCall(null, "finance_propose_receivable_create", {
       currency: "EUR",
       debtor_name: "Synthetische Person",
       description: "Synthetisches Privatdarlehen",
@@ -47,7 +44,7 @@ test("accepts valid read and proposal arguments", () => {
     "finance_propose_receivable_create",
   );
   assert.equal(
-    validateFinanceToolCall(FINANCE_TOOL_NAMESPACE, "finance_propose_payment_record", {
+    validateFinanceToolCall(null, "finance_propose_payment_record", {
       expected_version: 2,
       payment: {
         amount: "12.50",
@@ -62,7 +59,7 @@ test("accepts valid read and proposal arguments", () => {
   );
 });
 
-test("rejects unknown namespaces, extra fields, floats, and malformed money", () => {
+test("rejects namespace calls, extra fields, floats, and malformed money", () => {
   assert.throws(
     () => validateFinanceToolCall("terminal", "finance_get_overview", {}),
     (error: unknown) => error instanceof FinanceToolContractError && error.code === "unknown_tool",
@@ -73,12 +70,12 @@ test("rejects unknown namespaces, extra fields, floats, and malformed money", ()
     { limit: 51 },
   ]) {
     assert.throws(
-      () => validateFinanceToolCall(FINANCE_TOOL_NAMESPACE, "finance_list_transactions", argumentsValue),
+      () => validateFinanceToolCall(null, "finance_list_transactions", argumentsValue),
       (error: unknown) => error instanceof FinanceToolContractError && error.code === "invalid_arguments",
     );
   }
   assert.throws(
-    () => validateFinanceToolCall(FINANCE_TOOL_NAMESPACE, "finance_propose_receivable_update", {
+    () => validateFinanceToolCall(null, "finance_propose_receivable_update", {
       changes: { original_amount: "12.5" },
       expected_version: 1,
       rationale: "Ungültiges Geldformat",
@@ -111,7 +108,7 @@ test("rejects unknown namespaces, extra fields, floats, and malformed money", ()
   ]) {
     assert.throws(
       () => validateFinanceToolCall(
-        FINANCE_TOOL_NAMESPACE,
+        null,
         "finance_propose_receivable_create",
         argumentsValue,
       ),
@@ -122,11 +119,11 @@ test("rejects unknown namespaces, extra fields, floats, and malformed money", ()
 
 test("rejects oversized and non-object arguments", () => {
   assert.throws(
-    () => validateFinanceToolCall(FINANCE_TOOL_NAMESPACE, "finance_get_overview", "not-an-object"),
+    () => validateFinanceToolCall(null, "finance_get_overview", "not-an-object"),
     FinanceToolContractError,
   );
   assert.throws(
-    () => validateFinanceToolCall(FINANCE_TOOL_NAMESPACE, "finance_get_overview", {
+    () => validateFinanceToolCall(null, "finance_get_overview", {
       currency: "A".repeat(17_000),
     }),
     (error: unknown) =>

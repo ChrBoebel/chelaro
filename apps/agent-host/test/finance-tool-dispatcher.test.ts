@@ -300,7 +300,7 @@ function call(
     threadId,
     turnId,
     callId,
-    namespace: "chelaro_finance",
+    namespace: null,
     tool,
     arguments: argumentsValue,
   };
