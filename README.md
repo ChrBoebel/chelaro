@@ -211,7 +211,7 @@ verschoben werden.
 
 Chelaro verwendet einen kostenlosen öffentlichen GitHub-Releases-Kanal. Die macOS-App prüft beim
 Start und anschließend alle sechs Stunden, ob ein höheres stabiles Release existiert. Ein sichtbarer
-Hinweis führt durch Download, SHA-256-Prüfung und das Öffnen der DMG. Der Nutzer ersetzt die App
+Hinweis führt durch Download, SHA-256-Prüfung, macOS-Quarantänemarkierung und das Öffnen der DMG. Der Nutzer ersetzt die App
 anschließend selbst im Programme-Ordner; lokale Daten unter
 `~/Library/Application Support/Finance OS/` bleiben davon getrennt.
 
@@ -222,8 +222,8 @@ und stellt diesen Ablauf nicht als automatisches oder von Apple verifiziertes Up
 Release-, Prüf- und Rollback-Ablauf steht im
 [macOS Release and Update Process](docs/releases/RELEASE_PROCESS.md).
 
-Bestehende `0.2.x`-Installationen besitzen diesen kostenlosen Prüfer noch nicht. `0.3.1` ist deshalb
-die einmalig manuell zu installierende Basis; erst sie kann ein späteres `0.3.2` in der App
+Bestehende `0.2.x`-Installationen besitzen diesen kostenlosen Prüfer noch nicht. `0.3.2` ist deshalb
+die einmalig manuell zu installierende Basis; erst sie kann ein späteres `0.3.3` in der App
 ankündigen und herunterladen.
 
 ## Sicherheit und Datenintegrität

@@ -12,12 +12,12 @@ service.
 ## Bootstrap boundary
 
 Versions `0.2.x` contain the superseded Squirrel prototype and cannot discover this manual update
-channel. `0.3.1` is therefore a one-time manual bootstrap: download its DMG from the GitHub Release,
-independently compare its checksum, and replace the old application. From installed `0.3.1`
-onward, Chelaro can announce and download a separately published higher version such as `0.3.2`.
+channel. `0.3.2` is therefore a one-time manual bootstrap: download its DMG from the GitHub Release,
+independently compare its checksum, and replace the old application. From installed `0.3.2`
+onward, Chelaro can announce and download a separately published higher version such as `0.3.3`.
 
 Never represent the synthetic E2E or an installed `0.2.x` build as proof of a real cross-version
-GitHub update. That proof requires both the published `0.3.1` baseline and a later immutable stable
+GitHub update. That proof requires both the published `0.3.2` baseline and a later immutable stable
 release.
 
 ## Trust boundary
@@ -30,6 +30,7 @@ The client accepts a release only when all of these conditions hold:
 - exactly one `Chelaro-X.Y.Z-arm64.dmg` and one `SHA256SUMS.txt` exist;
 - the downloaded byte count matches GitHub's declared asset size;
 - the downloaded DMG's SHA-256 digest exactly matches its single checksum entry;
+- the verified DMG receives macOS quarantine metadata before it becomes available to open;
 - redirects remain on GitHub-controlled download hosts.
 
 Failed or partial downloads retain the suffix `.download` only while streaming and are removed on
@@ -48,7 +49,7 @@ reviewed tag workflow remain security controls.
 3. The dialog explains the manual installation and macOS warning before download.
 4. The user selects **DMG herunterladen**.
 5. Chelaro downloads into the user's Downloads folder and displays progress.
-6. Chelaro enables **DMG öffnen** only after size and SHA-256 verification pass.
+6. Chelaro enables **DMG öffnen** only after size, SHA-256, and macOS-quarantine checks pass.
 7. The user opens the DMG, drags Chelaro to `Programme`, and confirms replacement.
 8. If Gatekeeper blocks the unsigned build, the user explicitly selects Finder right-click →
    **Öffnen**, or **Datenschutz & Sicherheit → Dennoch öffnen**.
@@ -132,8 +133,8 @@ the exact asset names and will reject duplicates or mismatches.
 
 - Confirm the Release is stable/latest and reports the expected `vX.Y.Z` tag.
 - Independently compare `shasum -a 256` for the DMG with `SHA256SUMS.txt`.
-- For the `0.3.1` bootstrap, install the DMG manually over the existing `0.2.x` application.
-- For `0.3.2` and later, start the previous installed `0.3.x` version and confirm the update control
+- For the `0.3.2` bootstrap, install the DMG manually over the existing `0.2.x` application.
+- For `0.3.3` and later, start the previous installed `0.3.x` version and confirm the update control
   announces `X.Y.Z`.
 - Exercise download, verification, DMG opening, manual replacement, and Gatekeeper instructions.
 - Confirm the About panel reports the new version after restart.
