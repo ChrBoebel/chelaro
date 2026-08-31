@@ -10,6 +10,7 @@ export type FinanceAssistantJsonPath =
   | "/v1/provider/refresh"
   | "/v1/sessions"
   | `/v1/sessions/${string}`
+  | `/v1/conversations/${string}`
   | "/v1/turns"
   | "/v1/turns/interrupt";
 
