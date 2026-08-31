@@ -11,6 +11,23 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.3.6] - 2026-08-31
+
+### Added
+
+- The application header now shows the installed Chelaro version reported by the Electron app
+  bundle, so the display automatically follows every synchronized release version.
+
+### Fixed
+
+- The packaged Next.js server now runs through Electron's background helper instead of launching
+  the main Chelaro executable as a second foreground application with a generic `exec` Dock icon.
+
+### Security
+
+- The renderer receives only the non-sensitive application version through the isolated preload
+  bridge; Node integration remains disabled and the existing navigation boundary is unchanged.
+
 ## [0.3.5] - 2026-08-31
 
 ### Changed
