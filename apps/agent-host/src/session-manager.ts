@@ -13,6 +13,19 @@ export type TurnStatus =
   | "completed"
   | "failed";
 
+/**
+ * Every identifier the host has seen in this epoch, tagged with the role it
+ * was seen in. The tag is what makes a resumed thread distinguishable from a
+ * genuine collision: reattaching the same provider thread is legitimate,
+ * while the same string arriving as a turn identifier is not.
+ */
+export type IssuedResourceKind = "provider_thread" | "provider_turn" | "session" | "turn";
+
+export interface IssuedResourceId {
+  id: string;
+  kind: IssuedResourceKind;
+}
+
 export interface FinanceChatState {
   appServer: AppServerStatus;
   auth: AuthStatus;
@@ -21,7 +34,7 @@ export interface FinanceChatState {
     version: string | null;
   };
   host: HostStatus;
-  issuedResourceIds: ReadonlyArray<string>;
+  issuedResourceIds: ReadonlyArray<IssuedResourceId>;
   session: null | {
     consentVersion: string;
     id: string;
@@ -45,7 +58,7 @@ export type FinanceChatEvent =
   | { type: "consent.revoke_pending"; version: string }
   | { type: "consent.revoked"; version: string }
   | { type: "session.start"; consentVersion: string; sessionId: string }
-  | { type: "session.ready"; providerThreadId: string; sessionId: string }
+  | { type: "session.ready"; providerThreadId: string; resumed: boolean; sessionId: string }
   | { type: "session.fail"; sessionId: string }
   | { type: "session.close"; sessionId: string }
   | { type: "turn.start"; sessionId: string; turnId: string }
@@ -155,7 +168,7 @@ export function reduceFinanceChatState(
     case "session.start":
       return startSession(state, event.sessionId, event.consentVersion);
     case "session.ready":
-      return markSessionReady(state, event.sessionId, event.providerThreadId);
+      return markSessionReady(state, event.sessionId, event.providerThreadId, event.resumed);
     case "session.fail":
       if (!state.session || state.session.id !== validResourceId(event.sessionId) || state.session.status !== "starting") {
         throw resourceNotFound("The finance chat session was not found in the starting state.");
@@ -193,7 +206,7 @@ function startSession(
   if (state.session && state.session.status !== "closed") {
     throw invalidTransition("The previous finance chat session must close before another starts.");
   }
-  const sessionId = availableResourceId(state, rawSessionId);
+  const sessionId = availableResourceId(state, rawSessionId, "session");
   return issueResourceIds({
     ...state,
     session: {
@@ -203,13 +216,14 @@ function startSession(
       status: "starting",
     },
     turn: null,
-  }, sessionId);
+  }, { id: sessionId, kind: "session" });
 }
 
 function markSessionReady(
   state: FinanceChatState,
   rawSessionId: string,
   rawProviderThreadId: string,
+  resumed: boolean,
 ): FinanceChatState {
   const sessionId = validResourceId(rawSessionId);
   if (!state.session || state.session.id !== sessionId || state.session.status !== "starting") {
@@ -217,11 +231,19 @@ function markSessionReady(
   }
   assertAuthenticated(state);
   assertGrantedConsent(state, state.session.consentVersion);
-  const providerThreadId = availableResourceId(state, rawProviderThreadId);
-  return issueResourceIds({
+  // A resumed conversation necessarily names the thread it was bound to, so a
+  // second sighting of that identifier is the intended outcome rather than a
+  // collision. It still may not have been seen in any other role.
+  const providerThreadId = resumed
+    ? reattachedResourceId(state, rawProviderThreadId, "provider_thread")
+    : availableResourceId(state, rawProviderThreadId, "provider_thread");
+  const ready: FinanceChatState = {
     ...state,
     session: { ...state.session, providerThreadId, status: "ready" },
-  }, providerThreadId);
+  };
+  return isIssued(state, providerThreadId)
+    ? ready
+    : issueResourceIds(ready, { id: providerThreadId, kind: "provider_thread" });
 }
 
 function closeSession(state: FinanceChatState, rawSessionId: string): FinanceChatState {
@@ -245,11 +267,11 @@ function startTurn(state: FinanceChatState, rawSessionId: string, rawTurnId: str
   if (isActiveTurn(state.turn)) {
     throw invalidTransition("A finance turn is already active.");
   }
-  const turnId = availableResourceId(state, rawTurnId);
+  const turnId = availableResourceId(state, rawTurnId, "turn");
   return issueResourceIds({
     ...state,
     turn: { id: turnId, providerTurnId: null, sessionId, status: "starting" },
-  }, turnId);
+  }, { id: turnId, kind: "turn" });
 }
 
 function markTurnRunning(
@@ -260,9 +282,9 @@ function markTurnRunning(
   assertAuthenticated(state);
   if (!state.session) throw resourceNotFound("The finance chat session was not found.");
   assertGrantedConsent(state, state.session.consentVersion);
-  const providerTurnId = availableResourceId(state, rawProviderTurnId);
+  const providerTurnId = availableResourceId(state, rawProviderTurnId, "provider_turn");
   const updated = updateTurn(state, rawTurnId, "starting", { providerTurnId, status: "running" });
-  return issueResourceIds(updated, providerTurnId);
+  return issueResourceIds(updated, { id: providerTurnId, kind: "provider_turn" });
 }
 
 function handleChildExit(state: FinanceChatState): FinanceChatState {
@@ -321,18 +343,49 @@ function assertConsentVersion(state: FinanceChatState, rawVersion: string): void
   }
 }
 
-function availableResourceId(state: FinanceChatState, rawId: string): string {
+function availableResourceId(
+  state: FinanceChatState,
+  rawId: string,
+  kind: IssuedResourceKind,
+): string {
   const id = validResourceId(rawId);
-  if (state.issuedResourceIds.includes(id)) {
+  if (issuedKind(state, id) !== undefined) {
     throw new SessionTransitionError(
       "identifier_reused",
-      "A resource identifier cannot be reused in this host epoch.",
+      `A ${kind} identifier cannot be reused in this host epoch.`,
     );
   }
   return id;
 }
 
-function issueResourceIds(state: FinanceChatState, ...ids: string[]): FinanceChatState {
+function reattachedResourceId(
+  state: FinanceChatState,
+  rawId: string,
+  kind: IssuedResourceKind,
+): string {
+  const id = validResourceId(rawId);
+  const seen = issuedKind(state, id);
+  if (seen !== undefined && seen !== kind) {
+    throw new SessionTransitionError(
+      "identifier_reused",
+      `A ${seen} identifier cannot reappear as a ${kind} identifier in this host epoch.`,
+    );
+  }
+  return id;
+}
+
+function issuedKind(state: FinanceChatState, id: string): IssuedResourceKind | undefined {
+  return state.issuedResourceIds.find((issued) => issued.id === id)?.kind;
+}
+
+function isIssued(state: FinanceChatState, id: string): boolean {
+  return issuedKind(state, id) !== undefined;
+}
+
+function issueResourceIds(
+  state: FinanceChatState,
+  ...ids: readonly IssuedResourceId[]
+): FinanceChatState {
   if (state.issuedResourceIds.length + ids.length > MAX_ISSUED_RESOURCE_IDS) {
     throw new SessionTransitionError(
       "identifier_exhausted",

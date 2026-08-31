@@ -10,6 +10,16 @@ from pydantic import AnyHttpUrl, SecretStr
 from finance_os_api.config import Settings
 from finance_os_api.main import create_app
 
+
+def runtime_binding(provider_thread_id: str) -> dict[str, str]:
+    return {
+        "provider_thread_id": provider_thread_id,
+        "provider_model": "gpt-5.5",
+        "provider_effort": "medium",
+        "provider_service_tier": "default",
+    }
+
+
 OWNER_TOKEN = "conversation-test-owner-token"
 AGENT_TOKEN = "conversation-test-agent-token"
 ASSISTANT_TOKEN = "conversation-test-assistant-token"
@@ -58,12 +68,15 @@ async def test_complete_conversation_survives_api_restart(
 
     bound = await assistant.put(
         f"/api/v1/finance-assistant/conversations/{conversation_id}/runtime",
-        json={"provider_thread_id": "provider_thread_synthetic_1"},
+        json=runtime_binding("provider_thread_synthetic_1"),
     )
     assert bound.status_code == 200
     assert bound.json()["data"] == {
         "conversation_id": conversation_id,
         "provider_thread_id": "provider_thread_synthetic_1",
+        "provider_model": "gpt-5.5",
+        "provider_effort": "medium",
+        "provider_service_tier": "default",
     }
 
     turn_id = "turn_synthetic_1"
@@ -267,12 +280,12 @@ async def test_provider_thread_binding_is_unique_and_immutable(
         "id"
     ]
     endpoint = f"/api/v1/finance-assistant/conversations/{first_id}/runtime"
-    first = await assistant.put(endpoint, json={"provider_thread_id": "provider_thread_1"})
-    replay = await assistant.put(endpoint, json={"provider_thread_id": "provider_thread_1"})
-    rebound = await assistant.put(endpoint, json={"provider_thread_id": "provider_thread_2"})
+    first = await assistant.put(endpoint, json=runtime_binding("provider_thread_1"))
+    replay = await assistant.put(endpoint, json=runtime_binding("provider_thread_1"))
+    rebound = await assistant.put(endpoint, json=runtime_binding("provider_thread_2"))
     duplicate = await assistant.put(
         f"/api/v1/finance-assistant/conversations/{second_id}/runtime",
-        json={"provider_thread_id": "provider_thread_1"},
+        json=runtime_binding("provider_thread_1"),
     )
 
     assert first.status_code == 200

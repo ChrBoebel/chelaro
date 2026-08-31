@@ -2,6 +2,10 @@ import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
 import type { FinanceAgentEvent, FinanceAgentSnapshot } from "./finance-agent-service.js";
+import {
+  assertFinanceModelSelection,
+  type FinanceModelSelection,
+} from "./finance-thread-contract.js";
 
 export const MAX_GATEWAY_BODY_BYTES = 70 * 1024;
 export const MAX_GATEWAY_EVENT_BYTES = 80 * 1024;
@@ -10,10 +14,15 @@ export const MAX_GATEWAY_SUBSCRIBERS = 4;
 
 export interface FinanceGatewayService {
   closeSession(sessionId: string): Promise<void>;
-  createSession(sessionId: string, conversationId: string): Promise<void>;
+  createSession(
+    sessionId: string,
+    conversationId: string,
+    selection?: FinanceModelSelection,
+  ): Promise<void>;
   deleteConversation(conversationId: string): Promise<void>;
   grantConsent(): Promise<unknown>;
   interruptTurn(): Promise<void>;
+  refreshModelCatalog(): Promise<unknown>;
   refreshProvider(): Promise<void>;
   revokeConsent(): Promise<unknown>;
   snapshot(): FinanceAgentSnapshot;
@@ -127,10 +136,23 @@ export class FinanceGateway {
       await this.#service.refreshProvider();
       return respondJson(response, 200, { snapshot: this.#service.snapshot() });
     }
+    if (request.method === "POST" && url.pathname === "/v1/models/refresh") {
+      assertEmptyBody(await readJson(request));
+      await this.#service.refreshModelCatalog();
+      return respondJson(response, 200, { snapshot: this.#service.snapshot() });
+    }
     if (request.method === "POST" && url.pathname === "/v1/sessions") {
-      const body = exactObject(await readJson(request), ["conversation_id", "session_id"]);
+      const body = exactObject(await readJson(request), [
+        "conversation_id",
+        "model_selection",
+        "session_id",
+      ]);
       const sessionId = publicId(body.session_id);
-      await this.#service.createSession(sessionId, publicId(body.conversation_id));
+      await this.#service.createSession(
+        sessionId,
+        publicId(body.conversation_id),
+        modelSelection(body.model_selection),
+      );
       return respondJson(response, 201, { snapshot: this.#service.snapshot() });
     }
     const sessionMatch = /^\/v1\/sessions\/([A-Za-z0-9_-]{1,128})$/.exec(url.pathname);
@@ -307,6 +329,21 @@ function publicId(value: unknown): string {
 function stringValue(value: unknown): string {
   if (typeof value !== "string") throw new FinanceGatewayHttpError(400, "invalid_request");
   return value;
+}
+
+function modelSelection(value: unknown): FinanceModelSelection {
+  const body = exactObject(value, ["effort", "fast_mode", "model"]);
+  const candidate = {
+    effort: body.effort,
+    fastMode: body.fast_mode,
+    model: body.model,
+  };
+  try {
+    assertFinanceModelSelection(candidate);
+  } catch {
+    throw new FinanceGatewayHttpError(400, "invalid_request");
+  }
+  return candidate;
 }
 
 function eventCursor(value: string | string[]): number {

@@ -3,6 +3,7 @@ import test, { type TestContext } from "node:test";
 
 import { FinanceGateway, type FinanceGatewayService } from "../src/finance-gateway.js";
 import type { FinanceAgentSnapshot } from "../src/finance-agent-service.js";
+import type { FinanceModelSelection } from "../src/finance-thread-contract.js";
 
 const TOKEN = "a".repeat(64);
 
@@ -13,17 +14,29 @@ class StubService implements FinanceGatewayService {
     auth: "authenticated",
     consent: { status: "granted", version: "2026-08-31.v2" },
     host: "ready",
+    models: {
+      available: [{ efforts: ["low", "medium", "high"], model: "gpt-5.5", supportsFastMode: true }],
+      selected: { effort: "medium", fastMode: false, model: "gpt-5.5" },
+    },
     provider: { status: "ready", version: "0.151.0" },
     session: null,
     turn: null,
+    usage: null,
   };
 
   snapshot(): FinanceAgentSnapshot { return structuredClone(this.state); }
   async grantConsent(): Promise<void> { this.calls.push({ operation: "grant", values: [] }); }
   async revokeConsent(): Promise<void> { this.calls.push({ operation: "revoke", values: [] }); }
   async refreshProvider(): Promise<void> { this.calls.push({ operation: "refreshProvider", values: [] }); }
-  async createSession(sessionId: string, conversationId: string): Promise<void> {
-    this.calls.push({ operation: "createSession", values: [sessionId, conversationId] });
+  async refreshModelCatalog(): Promise<void> {
+    this.calls.push({ operation: "refreshModelCatalog", values: [] });
+  }
+  async createSession(
+    sessionId: string,
+    conversationId: string,
+    selection?: FinanceModelSelection,
+  ): Promise<void> {
+    this.calls.push({ operation: "createSession", values: [sessionId, conversationId, selection] });
   }
   async closeSession(sessionId: string): Promise<void> {
     this.calls.push({ operation: "closeSession", values: [sessionId] });
@@ -67,6 +80,7 @@ test("finance gateway: validates exact commands before invoking the service", as
   const created = await request(origin, "/v1/sessions", {
     body: JSON.stringify({
       conversation_id: "123e4567-e89b-42d3-a456-426614174000",
+      model_selection: { effort: "medium", fast_mode: false, model: "gpt-5.5" },
       session_id: "session_1",
     }),
     headers: { "content-type": "application/json" },
@@ -82,7 +96,11 @@ test("finance gateway: validates exact commands before invoking the service", as
   assert.deepEqual(service.calls, [
     {
       operation: "createSession",
-      values: ["session_1", "123e4567-e89b-42d3-a456-426614174000"],
+      values: [
+        "session_1",
+        "123e4567-e89b-42d3-a456-426614174000",
+        { effort: "medium", fastMode: false, model: "gpt-5.5" },
+      ],
     },
     { operation: "startTurn", values: ["session_1", "turn_1", "Wie ist mein Stand?"] },
   ]);
@@ -91,6 +109,7 @@ test("finance gateway: validates exact commands before invoking the service", as
     body: JSON.stringify({
       conversation_id: "123e4567-e89b-42d3-a456-426614174000",
       extra: true,
+      model_selection: { effort: "medium", fast_mode: false, model: "gpt-5.5" },
       session_id: "session_2",
     }),
     headers: { "content-type": "application/json" },

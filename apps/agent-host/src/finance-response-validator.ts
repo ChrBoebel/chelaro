@@ -7,12 +7,37 @@ import type { ThreadUnsubscribeResponse } from "../generated/codex/ts/v2/ThreadU
 import type { TurnStartResponse } from "../generated/codex/ts/v2/TurnStartResponse.js";
 import { SUPPORTED_CODEX_VERSION } from "./codex-provider.js";
 import {
+  DEFAULT_FINANCE_MODEL_SELECTION,
+  FINANCE_SERVICE_TIER_FAST,
+  FINANCE_SUPPORTED_EFFORTS,
+  FINANCE_SUPPORTED_MODELS,
+  financeServiceTier,
+  type FinanceEffort,
+  type FinanceModelId,
+  type FinanceModelSelection,
+} from "./finance-thread-contract.js";
+import {
   ProtocolValidationError,
   validateGetAccountResponse,
+  validateModelListResponse,
   validateThreadStartResponse,
   validateThreadResumeResponse,
   validateTurnStartResponse,
 } from "./runtime-validator.js";
+
+export const MAX_FINANCE_MODEL_CATALOG_PAGES = 8;
+
+export interface FinanceCatalogModel {
+  efforts: FinanceEffort[];
+  model: FinanceModelId;
+  supportsFastMode: boolean;
+}
+
+export interface FinanceThreadUsage {
+  contextWindow: number | null;
+  totalTokens: number;
+  usedTokens: number;
+}
 
 const exactThreadResponseKeys = [
   "activePermissionProfile",
@@ -41,6 +66,7 @@ export function assertSafeFinanceThreadResponse(
   value: unknown,
   runtimeDirectory: string,
   operation: "resume" | "start" = "start",
+  selection: FinanceModelSelection = DEFAULT_FINANCE_MODEL_SELECTION,
 ): asserts value is ThreadResumeResponse | ThreadStartResponse {
   if (operation === "resume") validateThreadResumeResponse(value);
   else validateThreadStartResponse(value);
@@ -51,7 +77,12 @@ export function assertSafeFinanceThreadResponse(
     response.approvalPolicy !== "never" ||
     response.approvalsReviewer !== "user" ||
     response.modelProvider !== "openai" ||
-    !/^[A-Za-z0-9._-]{1,128}$/.test(response.model) ||
+    // Codex accepts an unknown model, effort, or service tier without an
+    // error and silently reports a different or null value, so the requested
+    // configuration only counts once the thread echoes it back unchanged.
+    response.model !== selection.model ||
+    response.reasoningEffort !== selection.effort ||
+    response.serviceTier !== financeServiceTier(selection.fastMode) ||
     realpathSync(response.cwd) !== runtimeRoot ||
     response.instructionSources.length !== 0 ||
     !isEmptyArray(response.runtimeWorkspaceRoots) ||
@@ -108,6 +139,100 @@ export function assertFinanceThreadDeleteResponse(value: unknown): void {
   if (!isRecord(value) || Object.keys(value).length !== 0) {
     throw unsafe("Codex did not delete the finance thread.");
   }
+}
+
+/**
+ * Reduces a thread token usage report to the three numbers the assistant
+ * shows. Fast Mode is sold as increased usage, so the report has to be
+ * trustworthy enough to display: an unexpected shape is rejected rather than
+ * turned into a plausible-looking number.
+ */
+export function assertFinanceThreadUsage(value: unknown): FinanceThreadUsage {
+  if (
+    !isRecord(value) ||
+    JSON.stringify(Object.keys(value).sort()) !==
+      JSON.stringify(["last", "modelContextWindow", "total"]) ||
+    !isRecord(value.total) ||
+    !isRecord(value.last) ||
+    !(value.modelContextWindow === null || isTokenCount(value.modelContextWindow))
+  ) {
+    throw unsafe("Codex reported an unusable finance thread token usage.");
+  }
+  return {
+    contextWindow: value.modelContextWindow as number | null,
+    totalTokens: tokenCount(value.total.totalTokens),
+    // The most recent turn's input is the conversation Codex actually sent, so
+    // that number — not the cumulative total — is what fills the context window.
+    usedTokens: tokenCount(value.last.inputTokens),
+  };
+}
+
+/**
+ * Reduces one `model/list` page to the models the finance assistant may use.
+ * Anything outside `FINANCE_SUPPORTED_MODELS` is dropped rather than rejected:
+ * Codex ships new models independently of Chelaro, and an unreviewed model
+ * must stay invisible instead of breaking the picker.
+ */
+export function assertFinanceModelCatalogPage(value: unknown): {
+  models: FinanceCatalogModel[];
+  nextCursor: string | null;
+} {
+  validateModelListResponse(value);
+  const page = value as { data: unknown; nextCursor: unknown };
+  if (!Array.isArray(page.data) || page.data.length > 64) {
+    throw unsafe("Codex returned an unusable finance model catalog.");
+  }
+  if (page.nextCursor !== null && !isSafeCursor(page.nextCursor)) {
+    throw unsafe("Codex returned an unusable finance model catalog cursor.");
+  }
+  const models: FinanceCatalogModel[] = [];
+  for (const entry of page.data) {
+    if (!isRecord(entry) || typeof entry.model !== "string") {
+      throw unsafe("Codex returned an unusable finance model catalog entry.");
+    }
+    if (entry.hidden === true) continue;
+    if (!FINANCE_SUPPORTED_MODELS.includes(entry.model as FinanceModelId)) continue;
+    if (models.some((known) => known.model === entry.model)) continue;
+    models.push({
+      efforts: supportedEfforts(entry.supportedReasoningEfforts),
+      model: entry.model as FinanceModelId,
+      supportsFastMode: supportsFastMode(entry.serviceTiers),
+    });
+  }
+  return { models, nextCursor: (page.nextCursor as string | null) ?? null };
+}
+
+function supportedEfforts(value: unknown): FinanceEffort[] {
+  if (!Array.isArray(value)) {
+    throw unsafe("Codex returned an unusable finance model effort list.");
+  }
+  const offered = new Set(
+    value.flatMap((option) =>
+      isRecord(option) && typeof option.reasoningEffort === "string" ? [option.reasoningEffort] : [],
+    ),
+  );
+  return FINANCE_SUPPORTED_EFFORTS.filter((effort) => offered.has(effort));
+}
+
+function supportsFastMode(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (!Array.isArray(value)) {
+    throw unsafe("Codex returned an unusable finance model service tier list.");
+  }
+  return value.some((tier) => isRecord(tier) && tier.id === FINANCE_SERVICE_TIER_FAST);
+}
+
+function tokenCount(value: unknown): number {
+  if (!isTokenCount(value)) throw unsafe("Codex reported an unusable finance token count.");
+  return value;
+}
+
+function isTokenCount(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+function isSafeCursor(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && /^[A-Za-z0-9._~-]{1,512}$/.test(value);
 }
 
 function validProviderId(value: string): boolean {

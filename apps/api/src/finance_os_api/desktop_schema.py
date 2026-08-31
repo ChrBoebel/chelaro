@@ -4,7 +4,7 @@ from sqlalchemy import Connection, inspect, text
 
 from finance_os_api.domain.models import Base
 
-DESKTOP_SCHEMA_VERSION = 4
+DESKTOP_SCHEMA_VERSION = 5
 SCHEMA_TABLE = "desktop_schema_migrations"
 
 V1_PROPOSAL_COLUMNS = {
@@ -55,6 +55,8 @@ def prepare_desktop_schema(connection: Connection) -> None:
             migrate_v2_to_v3(connection)
         elif version == 3:
             migrate_v3_to_v4(connection)
+        elif version == 4:
+            migrate_v4_to_v5(connection)
         else:  # pragma: no cover - guarded by the supported range above
             raise RuntimeError(f"Missing desktop migration after version {version}.")
         version += 1
@@ -224,6 +226,27 @@ def migrate_v2_to_v3(connection: Connection) -> None:
     )
 
 
+# An installation that predates ADR 0014 ran on whatever the owner's Codex
+# configuration resolved to. That value is not recoverable, so existing
+# bindings adopt the current Chelaro default and are re-bound on the next
+# resume, exactly like the PostgreSQL migration does.
+BACKFILL_MODEL = "gpt-5.5"
+BACKFILL_EFFORT = "medium"
+BACKFILL_SERVICE_TIER = "default"
+
+V4_RUNTIME_COLUMNS = {
+    "conversation_id",
+    "provider_name",
+    "provider_thread_id",
+    "updated_at",
+}
+V5_RUNTIME_COLUMNS = V4_RUNTIME_COLUMNS | {
+    "provider_model",
+    "provider_effort",
+    "provider_service_tier",
+}
+
+
 def migrate_v3_to_v4(connection: Connection) -> None:
     """Add durable local finance-assistant conversations without rewriting finance data."""
 
@@ -242,6 +265,68 @@ def migrate_v3_to_v4(connection: Connection) -> None:
         connection,
         tables=[Base.metadata.tables[name] for name in sorted(expected_absent)],
     )
+
+
+def migrate_v4_to_v5(connection: Connection) -> None:
+    """Record the explicit model configuration each provider thread runs on."""
+
+    inspector = inspect(connection)
+    if "assistant_provider_runtime" not in set(inspector.get_table_names()):
+        raise RuntimeError("Desktop schema version 4 is missing the provider runtime table.")
+    columns = {column["name"] for column in inspector.get_columns("assistant_provider_runtime")}
+    if columns == V5_RUNTIME_COLUMNS:
+        # `migrate_v3_to_v4` builds the assistant tables from the live metadata,
+        # so a database that has just come through it already carries this
+        # shape — and, being freshly created, carries no rows to migrate.
+        return
+    if columns != V4_RUNTIME_COLUMNS:
+        raise RuntimeError("Desktop schema version 4 provider runtime columns are unexpected.")
+
+    # SQLite can neither tighten a column to NOT NULL nor add a CHECK
+    # constraint in place, so the table is rebuilt with the exact shape
+    # `Base.metadata` declares.
+    connection.exec_driver_sql(
+        "ALTER TABLE assistant_provider_runtime RENAME TO assistant_provider_runtime_v4"
+    )
+    connection.exec_driver_sql(
+        """
+        CREATE TABLE assistant_provider_runtime (
+            conversation_id INTEGER NOT NULL,
+            provider_name TEXT DEFAULT 'codex' NOT NULL,
+            provider_thread_id VARCHAR(128) NOT NULL,
+            provider_model VARCHAR(128) NOT NULL,
+            provider_effort TEXT NOT NULL,
+            provider_service_tier TEXT NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            PRIMARY KEY (conversation_id),
+            CONSTRAINT ck_assistant_runtime_provider CHECK (provider_name IN ('codex')),
+            CONSTRAINT ck_assistant_runtime_effort CHECK (
+                provider_effort IN ('low', 'medium', 'high')
+            ),
+            CONSTRAINT ck_assistant_runtime_service_tier CHECK (
+                provider_service_tier IN ('default', 'priority')
+            ),
+            FOREIGN KEY(conversation_id) REFERENCES assistant_conversations (id)
+                ON DELETE RESTRICT,
+            UNIQUE (provider_thread_id)
+        )
+        """
+    )
+    connection.execute(
+        text(
+            "INSERT INTO assistant_provider_runtime ("
+            " conversation_id, provider_name, provider_thread_id,"
+            " provider_model, provider_effort, provider_service_tier, updated_at)"
+            " SELECT conversation_id, provider_name, provider_thread_id,"
+            " :model, :effort, :service_tier, updated_at"
+            " FROM assistant_provider_runtime_v4"
+        ).bindparams(
+            model=BACKFILL_MODEL,
+            effort=BACKFILL_EFFORT,
+            service_tier=BACKFILL_SERVICE_TIER,
+        )
+    )
+    connection.exec_driver_sql("DROP TABLE assistant_provider_runtime_v4")
 
 
 def record_version(connection: Connection, version: int) -> None:

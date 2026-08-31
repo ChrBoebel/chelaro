@@ -49,6 +49,13 @@ export async function runFinanceAssistantE2e(window, { dataRoot }) {
     ) {
       throw new Error("The complete finance conversation was not stored locally.");
     }
+    // ADR 0013 promises the same Codex context on reopening, which has to hold
+    // inside one application run and not only after a restart.
+    await clickButton(window, "Konfiguration ändern");
+    await waitForButton(window, "Unterhaltung fortsetzen");
+    await clickButton(window, "Unterhaltung fortsetzen");
+    await waitForText(window, "prüfbaren Vorschlag vorbereitet");
+
     window.webContents.reload();
     await waitForButton(window, "Assistent");
     await clickButton(window, "Assistent");
@@ -128,6 +135,7 @@ export async function runFinanceAssistantE2e(window, { dataRoot }) {
     const result = {
       assistantAnswerStreamed: true,
       completeConversationPersisted: true,
+      conversationResumedInSameRun: true,
       conversationVisibleAfterRendererRestart: true,
       canonicalDataUnchangedBeforeApproval: true,
       consentCompleted: true,

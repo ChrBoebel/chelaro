@@ -2,6 +2,12 @@ import Ajv, { type AnySchema, type ValidateFunction } from "ajv";
 
 import type { JsonValue } from "../generated/codex/ts/serde_json/JsonValue.js";
 import type { FinanceToolName } from "./finance-tool-contract.js";
+import {
+  assertFinanceModelSelection,
+  FINANCE_SERVICE_TIER_FAST,
+  financeServiceTier,
+  type FinanceModelSelection,
+} from "./finance-thread-contract.js";
 
 export const MAX_FINANCE_API_RESPONSE_BYTES = 60 * 1024;
 export const FINANCE_API_TIMEOUT_MS = 10_000;
@@ -32,8 +38,17 @@ export interface AssistantCompletedMessageInput {
   text: string;
 }
 
+export interface ConversationRuntimeBinding {
+  providerThreadId: string;
+  selection: FinanceModelSelection;
+}
+
 export interface AssistantHistoryApi {
-  bindConversationRuntime(conversationId: string, providerThreadId: string): Promise<void>;
+  bindConversationRuntime(
+    conversationId: string,
+    providerThreadId: string,
+    selection: FinanceModelSelection,
+  ): Promise<void>;
   completeConversationTurn(
     conversationId: string,
     turnId: string,
@@ -46,7 +61,7 @@ export interface AssistantHistoryApi {
     status: "failed" | "interrupted",
     errorCode: string,
   ): Promise<void>;
-  getConversationRuntime(conversationId: string): Promise<string | null>;
+  getConversationRuntime(conversationId: string): Promise<ConversationRuntimeBinding | null>;
   reserveConversationTurn(conversationId: string, turnId: string, prompt: string): Promise<void>;
 }
 
@@ -74,26 +89,55 @@ export class FinanceApiClient {
     this.#token = undefined;
   }
 
-  async getConversationRuntime(conversationId: string): Promise<string | null> {
+  async getConversationRuntime(conversationId: string): Promise<ConversationRuntimeBinding | null> {
     const parsed = await this.#requestJson(
       `/api/v1/finance-assistant/conversations/${resourceId(conversationId)}/runtime`,
       "GET",
     );
     if (!isRecord(parsed) || !isRecord(parsed.data) || !exactKeys(parsed, ["data"]) ||
-      !exactKeys(parsed.data, ["conversation_id", "provider_thread_id"]) ||
+      !exactKeys(parsed.data, [
+        "conversation_id",
+        "provider_effort",
+        "provider_model",
+        "provider_service_tier",
+        "provider_thread_id",
+      ]) ||
       parsed.data.conversation_id !== conversationId ||
       !(parsed.data.provider_thread_id === null || validResourceId(parsed.data.provider_thread_id))) {
       throw new FinanceApiClientError("invalid_response");
     }
-    return parsed.data.provider_thread_id;
+    if (parsed.data.provider_thread_id === null) return null;
+    const selection = {
+      effort: parsed.data.provider_effort,
+      fastMode: parsed.data.provider_service_tier === FINANCE_SERVICE_TIER_FAST,
+      model: parsed.data.provider_model,
+    };
+    try {
+      assertFinanceModelSelection(selection);
+    } catch {
+      // A stored configuration outside the current allowlist cannot be
+      // resumed safely; the caller surfaces the lost binding instead.
+      throw new FinanceApiClientError("invalid_response");
+    }
+    return { providerThreadId: parsed.data.provider_thread_id, selection };
   }
 
-  async bindConversationRuntime(conversationId: string, providerThreadId: string): Promise<void> {
+  async bindConversationRuntime(
+    conversationId: string,
+    providerThreadId: string,
+    selection: FinanceModelSelection,
+  ): Promise<void> {
+    assertFinanceModelSelection(selection);
     await this.#historyMutation(
       conversationId,
       "/runtime",
       "PUT",
-      { provider_thread_id: resourceId(providerThreadId) },
+      {
+        provider_effort: selection.effort,
+        provider_model: selection.model,
+        provider_service_tier: financeServiceTier(selection.fastMode),
+        provider_thread_id: resourceId(providerThreadId),
+      },
       undefined,
     );
   }
@@ -178,7 +222,13 @@ export class FinanceApiClient {
       throw new FinanceApiClientError("invalid_response");
     }
     const expectedKeys = turnId === undefined
-      ? ["conversation_id", "provider_thread_id"]
+      ? [
+          "conversation_id",
+          "provider_effort",
+          "provider_model",
+          "provider_service_tier",
+          "provider_thread_id",
+        ]
       : ["conversation_id", "status", "turn_id"];
     if (!exactKeys(parsed.data, expectedKeys) || parsed.data.conversation_id !== conversationId) {
       throw new FinanceApiClientError("invalid_response");

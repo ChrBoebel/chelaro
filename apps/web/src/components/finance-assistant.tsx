@@ -26,14 +26,37 @@ type ProviderStatus = "checking" | "ready" | "not_found" | "unsupported" | "erro
 type SessionStatus = "starting" | "ready" | "context_lost" | "closed";
 type TurnStatus = "starting" | "running" | "interrupting" | "interrupted" | "completed" | "failed";
 
+type ModelEffort = "low" | "medium" | "high";
+
+interface ModelSelection {
+  effort: ModelEffort;
+  fastMode: boolean;
+  model: string;
+}
+
+interface CatalogModel {
+  efforts: ModelEffort[];
+  model: string;
+  supportsFastMode: boolean;
+}
+
+interface ThreadUsage {
+  compactions: number;
+  contextWindow: number | null;
+  totalTokens: number;
+  usedTokens: number;
+}
+
 interface FinanceAssistantSnapshot {
   appServer: AppServerStatus;
   auth: AuthStatus;
   consent: { status: ConsentStatus; version: string | null };
   host: HostStatus;
+  models: { available: CatalogModel[]; selected: ModelSelection };
   provider: { status: ProviderStatus; version: string | null };
   session: null | { conversationId: string | null; id: string; status: SessionStatus };
   turn: null | { id: string; status: TurnStatus };
+  usage: ThreadUsage | null;
 }
 
 interface ConversationSummary {
@@ -72,6 +95,12 @@ export function FinanceAssistant() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyStatus, setHistoryStatus] = useState<"active" | "archived">("active");
   const [nextBeforeSequence, setNextBeforeSequence] = useState<number | null>(null);
+  const [draftSelection, setDraftSelection] = useState<ModelSelection>({
+    effort: "medium",
+    fastMode: false,
+    model: "gpt-5.5",
+  });
+  const [lastPrompt, setLastPrompt] = useState<string | null>(null);
   const snapshotRef = useRef<FinanceAssistantSnapshot | null>(null);
   const streamsRef = useRef(new Map<string, ActiveStream>());
 
@@ -82,6 +111,11 @@ export function FinanceAssistant() {
         streamsRef.current.delete(key);
         failMessage(key, setMessages);
       }
+    }
+    // Adopt the host's verified configuration while no session holds one, so
+    // the picker shows what a new conversation would actually run on.
+    if (!next.session || next.session.status === "closed") {
+      setDraftSelection(next.models.selected);
     }
     snapshotRef.current = next;
     setSnapshotState(next);
@@ -229,8 +263,8 @@ export function FinanceAssistant() {
       const next = parseSnapshot(response.snapshot);
       if (next) setSnapshot(next);
       return response;
-    } catch {
-      setNotice("Die Aktion konnte nicht ausgeführt werden. Bitte versuche es erneut.");
+    } catch (error) {
+      setNotice(describeAssistantError(error));
       return null;
     } finally {
       setIsWorking(false);
@@ -256,7 +290,13 @@ export function FinanceAssistant() {
     streamsRef.current.clear();
     let selectedId = conversationId;
     if (!selectedId) {
-      const created = await historyMutation("/api/assistant/conversations", "POST", {});
+      let created: Record<string, unknown>;
+      try {
+        created = await historyMutation("/api/assistant/conversations", "POST", {});
+      } catch (error) {
+        setNotice(describeAssistantError(error));
+        return;
+      }
       const summary = parseConversation(created.data);
       if (!summary) {
         setNotice("Die neue Unterhaltung konnte nicht lokal angelegt werden.");
@@ -272,6 +312,11 @@ export function FinanceAssistant() {
     }
     await runAction("/api/assistant/sessions", {
       conversation_id: selectedId,
+      model_selection: {
+        effort: draftSelection.effort,
+        fast_mode: draftSelection.fastMode,
+        model: draftSelection.model,
+      },
       session_id: resourceId("session"),
     });
   }
@@ -313,11 +358,17 @@ export function FinanceAssistant() {
       await closeSession();
       if (hasLiveSessionFor(conversation.id)) return;
     }
-    const response = await historyMutation(
-      `/api/assistant/conversations/${encodeURIComponent(conversation.id)}`,
-      "PATCH",
-      { expected_version: conversation.version, status },
-    );
+    let response: Record<string, unknown>;
+    try {
+      response = await historyMutation(
+        `/api/assistant/conversations/${encodeURIComponent(conversation.id)}`,
+        "PATCH",
+        { expected_version: conversation.version, status },
+      );
+    } catch (error) {
+      setNotice(describeAssistantError(error));
+      return;
+    }
     const updated = parseConversation(response.data);
     if (!updated) return;
     setConversations((current) => current.filter(({ id }) => id !== updated.id));
@@ -392,8 +443,8 @@ export function FinanceAssistant() {
       const next = parseSnapshot(response.snapshot);
       if (!next) throw new Error("invalid_response");
       setSnapshot(next);
-    } catch {
-      setNotice("Die Unterhaltung konnte nicht beendet werden.");
+    } catch (error) {
+      setNotice(describeAssistantError(error));
     } finally {
       setIsWorking(false);
     }
@@ -405,20 +456,25 @@ export function FinanceAssistant() {
     const promptField = form.elements.namedItem("prompt");
     if (!(promptField instanceof HTMLTextAreaElement)) return;
     const prompt = promptField.value.trim();
+    if (!prompt) return;
+    promptField.value = "";
+    await sendPrompt(prompt);
+  }
+
+  async function sendPrompt(prompt: string) {
     const active = snapshotRef.current;
     if (
-      !prompt ||
       isWorking ||
       !active?.session ||
       active.session.status !== "ready" ||
       isTurnActive(active.turn)
     ) return;
     const turnId = resourceId("turn");
+    setLastPrompt(prompt);
     setMessages((current) => [
       ...current,
       { id: `user:${turnId}`, role: "user", status: "complete", text: prompt },
     ]);
-    promptField.value = "";
     const response = await runAction("/api/assistant/turns", {
       prompt,
       session_id: active.session.id,
@@ -430,6 +486,13 @@ export function FinanceAssistant() {
   if (availability === "loading" && historyLoading) return <AssistantLoading />;
 
   const activeTurn = isTurnActive(snapshot?.turn ?? null);
+  // Offering a retry only makes sense while the last attempt visibly failed and
+  // nothing else is running; anything else would resend a question twice.
+  const retryPrompt = !activeTurn && !isWorking && lastPrompt !== null && (
+    snapshot?.turn?.status === "failed" ||
+    snapshot?.turn?.status === "interrupted" ||
+    messages.at(-1)?.status === "failed"
+  ) ? lastPrompt : null;
   const selectedConversation = conversations.find(({ id }) => id === activeConversationId);
   const selectedConversationArchived = selectedConversation?.status === "archived";
   const sessionReady = snapshot?.session?.status === "ready" &&
@@ -516,10 +579,13 @@ export function FinanceAssistant() {
       ) : !sessionReady ? (
         <div className="space-y-4">
           <SessionPanel
+            available={snapshot.models.available}
             disabled={isWorking || snapshot.session?.status === "starting"}
             contextLost={snapshot.session?.status === "context_lost"}
             hasHistory={activeConversationId !== null}
+            onSelectionChange={setDraftSelection}
             onStart={() => void createSession(activeConversationId ?? undefined)}
+            selection={draftSelection}
           />
           {storedHistory}
         </div>
@@ -532,7 +598,11 @@ export function FinanceAssistant() {
           historyLoading={historyLoading}
           onLoadOlder={() => void loadOlderMessages()}
           onInterrupt={() => void runAction("/api/assistant/turns/interrupt")}
+          onReconfigure={() => void closeSession()}
+          onRetry={retryPrompt === null ? undefined : () => void sendPrompt(retryPrompt)}
           onSubmit={submitPrompt}
+          selection={snapshot.models.selected}
+          usage={snapshot.usage}
         />
       )}
         </div>
@@ -613,16 +683,24 @@ function ProviderPanel({
 }
 
 function SessionPanel({
+  available,
   contextLost,
   disabled,
   hasHistory,
+  onSelectionChange,
   onStart,
+  selection,
 }: {
+  available: CatalogModel[];
   contextLost: boolean;
   disabled: boolean;
   hasHistory: boolean;
+  onSelectionChange: (selection: ModelSelection) => void;
   onStart: () => void;
+  selection: ModelSelection;
 }) {
+  const active = available.find((entry) => entry.model === selection.model);
+  const efforts = active?.efforts ?? ["low", "medium", "high"];
   return (
     <div className="mt-5 rounded-panel border border-line bg-paper p-6 shadow-panel sm:p-8">
       <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-accent">Bereit</p>
@@ -636,6 +714,63 @@ function SessionPanel({
       <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
         Frage zum Beispiel nach deinem Monatssaldo, ungewöhnlichen Ausgaben oder überfälligen Forderungen.
       </p>
+      {available.length > 0 ? (
+        <div className="mt-6 flex flex-wrap items-end gap-5 border-t border-line pt-5">
+          <label className="flex flex-col gap-2">
+            <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">Modell</span>
+            <select
+              className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+              disabled={disabled}
+              onChange={(event) => {
+                const next = available.find((entry) => entry.model === event.target.value);
+                if (!next) return;
+                onSelectionChange({
+                  effort: next.efforts.includes(selection.effort) ? selection.effort : "medium",
+                  fastMode: selection.fastMode && next.supportsFastMode,
+                  model: next.model,
+                });
+              }}
+              value={selection.model}
+            >
+              {available.map((entry) => (
+                <option key={entry.model} value={entry.model}>{entry.model}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-2">
+            <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">Denktiefe</span>
+            <select
+              className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+              disabled={disabled}
+              onChange={(event) =>
+                onSelectionChange({ ...selection, effort: event.target.value as ModelEffort })
+              }
+              value={selection.effort}
+            >
+              {efforts.map((effort) => (
+                <option key={effort} value={effort}>{EFFORT_LABELS[effort]}</option>
+              ))}
+            </select>
+          </label>
+          {active?.supportsFastMode ? (
+            <label className="flex items-center gap-3 pb-2">
+              <input
+                checked={selection.fastMode}
+                className="size-4 accent-accent"
+                disabled={disabled}
+                onChange={(event) =>
+                  onSelectionChange({ ...selection, fastMode: event.target.checked })
+                }
+                type="checkbox"
+              />
+              <span className="text-sm text-ink">
+                Fast Mode
+                <span className="ml-2 text-xs text-muted">1,5x Geschwindigkeit, erhöhter Verbrauch</span>
+              </span>
+            </label>
+          ) : null}
+        </div>
+      ) : null}
       <Button
         size="regular"
         className="mt-6"
@@ -648,9 +783,22 @@ function SessionPanel({
             ? "Unterhaltung fortsetzen"
             : "Neue Unterhaltung"}
       </Button>
+      <p className="mt-4 text-xs text-muted">
+        {available.length === 0
+          ? "Die Unterhaltung wird an die geprüfte Standardkonfiguration gebunden."
+          : active?.supportsFastMode
+            ? "Modell, Denktiefe und Fast Mode werden beim Start an diese Unterhaltung gebunden."
+            : "Modell und Denktiefe werden beim Start an diese Unterhaltung gebunden. Dieses Modell bietet keinen Fast Mode."}
+      </p>
     </div>
   );
 }
+
+const EFFORT_LABELS: Record<ModelEffort, string> = {
+  low: "Niedrig",
+  medium: "Mittel",
+  high: "Hoch",
+};
 
 function HistorySidebar({
   activeId,
@@ -761,7 +909,11 @@ function ChatPanel({
   messages,
   onLoadOlder,
   onInterrupt,
+  onReconfigure,
+  onRetry,
   onSubmit,
+  selection,
+  usage,
   working,
 }: {
   activeTurn: boolean;
@@ -770,11 +922,31 @@ function ChatPanel({
   messages: DisplayMessage[];
   onLoadOlder: () => void;
   onInterrupt: () => void;
+  onReconfigure: () => void;
+  onRetry?: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  selection: ModelSelection;
+  usage: ThreadUsage | null;
   working: boolean;
 }) {
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+
+  function applySuggestion(text: string) {
+    const field = promptRef.current;
+    if (!field) return;
+    field.value = text;
+    field.focus();
+  }
+
   return (
     <div className="mt-5 overflow-hidden rounded-panel border border-line bg-paper shadow-panel">
+      <ChatHeader
+        activeTurn={activeTurn}
+        onReconfigure={onReconfigure}
+        selection={selection}
+        usage={usage}
+        working={working}
+      />
       <div className="min-h-[360px] max-h-[58vh] overflow-y-auto p-5 sm:p-7" aria-live="polite" aria-label="Unterhaltung mit dem Finanzassistenten">
         {hasOlderMessages ? (
           <div className="mb-4 text-center">
@@ -789,14 +961,22 @@ function ChatPanel({
             <h2 className="mt-4 text-xl font-medium tracking-[-0.03em] text-ink">Wobei darf ich dir helfen?</h2>
             <p className="mt-2 text-sm leading-6 text-muted">Ich kann deine strukturierten Finanzdaten lesen und Änderungen nur zur Prüfung vorschlagen.</p>
             <div className="mt-5 flex flex-wrap justify-center gap-2 text-xs text-muted">
-              <span className="rounded-full border border-line px-3 py-2">Wie war mein Monat?</span>
-              <span className="rounded-full border border-line px-3 py-2">Was ist noch offen?</span>
-              <span className="rounded-full border border-line px-3 py-2">Wo gebe ich mehr aus?</span>
+              {SUGGESTED_PROMPTS.map((suggestion) => (
+                <button
+                  className="rounded-full border border-line px-3 py-2 hover:border-accent/60 hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={activeTurn || working}
+                  key={suggestion}
+                  onClick={() => applySuggestion(suggestion)}
+                  type="button"
+                >
+                  {suggestion}
+                </button>
+              ))}
             </div>
           </div>
         ) : (
           <div className="mx-auto flex max-w-3xl flex-col gap-4">
-            {messages.map((message) => (
+            {messages.map((message, index) => (
               <article
                 key={message.id}
                 className={message.role === "user"
@@ -807,6 +987,10 @@ function ChatPanel({
                 {message.status === "failed" ? (
                   <p className="mt-2 text-xs text-danger">Diese Antwort war unvollständig und wurde verworfen.</p>
                 ) : null}
+                <MessageActions
+                  onRetry={onRetry !== undefined && index === messages.length - 1 ? onRetry : undefined}
+                  text={message.status === "complete" ? message.text : ""}
+                />
               </article>
             ))}
           </div>
@@ -818,6 +1002,7 @@ function ChatPanel({
           <textarea
             id="finance-assistant-prompt"
             name="prompt"
+            ref={promptRef}
             rows={2}
             maxLength={MAX_PROMPT_CHARACTERS}
             disabled={activeTurn || working}
@@ -846,6 +1031,106 @@ function ChatPanel({
       </form>
     </div>
   );
+}
+
+const SUGGESTED_PROMPTS = [
+  "Wie war mein Monat?",
+  "Was ist noch offen?",
+  "Wo gebe ich mehr aus?",
+] as const;
+
+/**
+ * The configuration is bound to the conversation for its whole life, so it has
+ * to stay visible while the conversation runs — not only while it is chosen.
+ */
+function ChatHeader({
+  activeTurn,
+  onReconfigure,
+  selection,
+  usage,
+  working,
+}: {
+  activeTurn: boolean;
+  onReconfigure: () => void;
+  selection: ModelSelection;
+  usage: ThreadUsage | null;
+  working: boolean;
+}) {
+  const contextShare = usage && usage.contextWindow
+    ? Math.min(100, Math.round((usage.usedTokens / usage.contextWindow) * 100))
+    : null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface/45 px-5 py-3 sm:px-7">
+      <p className="text-xs text-muted">
+        <span className="font-medium text-ink">{selection.model}</span>
+        <span aria-hidden="true"> · </span>
+        {EFFORT_LABELS[selection.effort]}
+        {selection.fastMode ? (
+          <>
+            <span aria-hidden="true"> · </span>
+            <span className="text-accent">Fast Mode</span>
+          </>
+        ) : null}
+      </p>
+      {usage ? (
+        <p className="text-xs text-muted" aria-live="polite">
+          {contextShare === null
+            ? `${formatTokens(usage.usedTokens)} Token im Kontext`
+            : `Kontext ${contextShare} % · ${formatTokens(usage.usedTokens)} von ${formatTokens(usage.contextWindow!)} Token`}
+          <span aria-hidden="true"> · </span>
+          {`${formatTokens(usage.totalTokens)} Token insgesamt`}
+          {usage.compactions > 0
+            ? ` · Verlauf ${usage.compactions}× verdichtet`
+            : ""}
+        </p>
+      ) : null}
+      <button
+        className="ml-auto text-xs font-medium text-accent disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={activeTurn || working}
+        onClick={onReconfigure}
+        type="button"
+      >
+        Konfiguration ändern
+      </button>
+    </div>
+  );
+}
+
+function MessageActions({ onRetry, text }: { onRetry?: () => void; text: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2_000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  if (text.length === 0 && onRetry === undefined) return null;
+  return (
+    <div className="mt-2 flex gap-4 text-[11px]">
+      {text.length > 0 ? (
+        <button
+          className="text-muted hover:text-ink"
+          onClick={() => {
+            void navigator.clipboard?.writeText(text).then(
+              () => setCopied(true),
+              () => undefined,
+            );
+          }}
+          type="button"
+        >
+          {copied ? "Kopiert" : "Kopieren"}
+        </button>
+      ) : null}
+      {onRetry ? (
+        <button className="text-accent hover:underline" onClick={onRetry} type="button">
+          Erneut senden
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function formatTokens(value: number): string {
+  return value.toLocaleString("de-DE");
 }
 
 function StoredMessagesPanel({
@@ -930,12 +1215,61 @@ function AssistantUnavailable({ compact = false }: { compact?: boolean }) {
   );
 }
 
+class AssistantRequestError extends Error {
+  readonly code: string;
+
+  constructor(code: string) {
+    super("assistant_request_failed");
+    this.name = "AssistantRequestError";
+    this.code = code;
+  }
+}
+
 async function assistantRequest(path: string, init: RequestInit): Promise<Record<string, unknown>> {
   const response = await fetch(path, { ...init, cache: "no-store" });
   const body: unknown = await response.json().catch(() => undefined);
-  if (!response.ok || !isRecord(body)) throw new Error("assistant_request_failed");
+  if (!response.ok || !isRecord(body)) throw new AssistantRequestError(errorCode(body));
   return body;
 }
+
+function errorCode(body: unknown): string {
+  if (
+    isRecord(body) &&
+    isRecord(body.error) &&
+    typeof body.error.code === "string" &&
+    /^[a-z_]{1,64}$/.test(body.error.code)
+  ) return body.error.code;
+  return "operation_rejected";
+}
+
+/**
+ * The host already distinguishes its refusals; the owner deserves the same
+ * distinction. Only a genuinely retryable failure may suggest another attempt.
+ */
+function describeAssistantError(error: unknown): string {
+  const code = error instanceof AssistantRequestError ? error.code : "operation_rejected";
+  return ASSISTANT_ERROR_MESSAGES[code] ??
+    `Die Aktion wurde vom Assistenten abgelehnt (${code}).`;
+}
+
+const ASSISTANT_ERROR_MESSAGES: Record<string, string> = {
+  agent_unavailable: "Der lokale Assistentendienst antwortet nicht. Starte Chelaro neu.",
+  assistant_unavailable: "Der lokale Assistentendienst antwortet nicht. Starte Chelaro neu.",
+  authentication_required: "Die Codex-Anmeldung fehlt. Führe im Terminal codex login aus und prüfe den Status erneut.",
+  consent_required: "Die Datenfreigabe fehlt. Stimme ihr zu, um fortzufahren.",
+  consent_version_mismatch: "Die Datenfreigabe ist veraltet. Stimme der aktuellen Fassung zu.",
+  finance_api_unavailable: "Die Finanzdaten stehen dem Assistenten gerade nicht zur Verfügung.",
+  identifier_reused: "Diese Kennung wurde in dieser Sitzung bereits verwendet. Starte Chelaro neu.",
+  invalid_request: "Die Anfrage war ungültig und wurde nicht gesendet.",
+  invalid_state: "Der Assistent ist in einem Zustand, der diese Aktion nicht erlaubt.",
+  model_not_available: "Das gewählte Modell bietet Codex gerade nicht an. Wähle ein anderes oder prüfe den Status erneut.",
+  protocol_incompatible: "Codex hat unerwartete Daten gesendet. Chelaro hat abgebrochen.",
+  resource_not_found: "Diese Unterhaltung ist nicht mehr aktiv. Beginne sie neu.",
+  session_busy: "Es läuft noch eine andere Unterhaltung. Beende sie zuerst.",
+  turn_busy: "Es läuft noch eine Antwort. Warte, bis sie fertig ist, oder stoppe sie.",
+  turn_failed: "Die Antwort konnte nicht gestartet werden. Versuche es erneut.",
+  unsafe_codex_configuration: "Codex meldet eine Konfiguration, die Chelaro nicht zulässt. Es wurde nichts gesendet.",
+};
 
 async function historyMutation(
   path: string,
@@ -1000,7 +1334,20 @@ function parseConversation(value: unknown): ConversationSummary | null {
 }
 
 function parseSnapshot(value: unknown): FinanceAssistantSnapshot | null {
-  if (!isRecord(value) || !exactKeys(value, ["appServer", "auth", "consent", "host", "provider", "session", "turn"])) return null;
+  if (
+    !isRecord(value) ||
+    !exactKeys(value, [
+      "appServer",
+      "auth",
+      "consent",
+      "host",
+      "models",
+      "provider",
+      "session",
+      "turn",
+      "usage",
+    ])
+  ) return null;
   if (
     !isOneOf(value.host, ["starting", "ready", "degraded", "stopping", "stopped"]) ||
     !isOneOf(value.appServer, ["stopped", "starting", "ready", "stopping", "crashed"]) ||
@@ -1013,10 +1360,53 @@ function parseSnapshot(value: unknown): FinanceAssistantSnapshot | null {
     !exactKeys(value.provider, ["status", "version"]) ||
     !isOneOf(value.provider.status, ["checking", "ready", "not_found", "unsupported", "error"]) ||
     !(value.provider.version === null || typeof value.provider.version === "string") ||
+    !validModels(value.models) ||
     !validSession(value.session) ||
-    !validTurn(value.turn)
+    !validTurn(value.turn) ||
+    !validUsage(value.usage)
   ) return null;
   return value as unknown as FinanceAssistantSnapshot;
+}
+
+function validModels(value: unknown): boolean {
+  if (!isRecord(value) || !exactKeys(value, ["available", "selected"])) return false;
+  if (!Array.isArray(value.available) || value.available.length > 32) return false;
+  return (
+    value.available.every(
+      (entry) =>
+        isRecord(entry) &&
+        exactKeys(entry, ["efforts", "model", "supportsFastMode"]) &&
+        typeof entry.model === "string" &&
+        typeof entry.supportsFastMode === "boolean" &&
+        Array.isArray(entry.efforts) &&
+        entry.efforts.every((effort) => isOneOf(effort, ["low", "medium", "high"])),
+    ) && validModelSelection(value.selected)
+  );
+}
+
+function validModelSelection(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    exactKeys(value, ["effort", "fastMode", "model"]) &&
+    typeof value.model === "string" &&
+    typeof value.fastMode === "boolean" &&
+    isOneOf(value.effort, ["low", "medium", "high"])
+  );
+}
+
+function validUsage(value: unknown): boolean {
+  return value === null || (
+    isRecord(value) &&
+    exactKeys(value, ["compactions", "contextWindow", "totalTokens", "usedTokens"]) &&
+    isTokenCount(value.compactions) &&
+    (value.contextWindow === null || isTokenCount(value.contextWindow)) &&
+    isTokenCount(value.totalTokens) &&
+    isTokenCount(value.usedTokens)
+  );
+}
+
+function isTokenCount(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) >= 0;
 }
 
 function validSession(value: unknown): boolean {
