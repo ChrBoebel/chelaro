@@ -3,12 +3,10 @@ import { describe, expect, test } from "vitest";
 import nextConfig from "./next.config";
 
 describe("standalone output tracing", () => {
-  test("excludes prior desktop runtime and package artifacts", () => {
-    expect(nextConfig.outputFileTracingExcludes?.["/*"]).toEqual([
-      "../desktop/.runtime/**/*",
-      "../desktop/dist/**/*",
-      "../../node_modules/.pnpm/node_modules/desktop/.runtime/**/*",
-      "../../node_modules/.pnpm/node_modules/desktop/dist/**/*",
-    ]);
+  test("includes helpers through the web package instead of pnpm's shared store", () => {
+    const includes = nextConfig.outputFileTracingIncludes?.["/*"];
+
+    expect(includes).toEqual(["node_modules/@swc/helpers/esm/**/*"]);
+    expect(includes?.some((pattern) => pattern.includes(".pnpm"))).toBe(false);
   });
 });
