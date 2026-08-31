@@ -138,7 +138,7 @@ the exact asset names and will reject duplicates or mismatches.
   announces `X.Y.Z`.
 - Exercise download, verification, DMG opening, manual replacement, and Gatekeeper instructions.
 - Confirm the About panel reports the new version after restart.
-- Confirm the application header reports the same installed version and the Dock contains only one
+- Confirm the application footer reports the same installed version and the Dock contains only one
   Chelaro application entry.
 - Confirm existing synthetic documents, proposals, audit events, Codex login reuse, and consent
   state remain intact.

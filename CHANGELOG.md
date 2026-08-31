@@ -11,12 +11,12 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
-## [0.3.6] - 2026-08-31
+## [0.3.7] - 2026-08-31
 
 ### Added
 
-- The application header now shows the installed Chelaro version reported by the Electron app
-  bundle, so the display automatically follows every synchronized release version.
+- A quiet footer now shows the installed Chelaro version reported by the Electron app bundle, so
+  the display automatically follows every synchronized release version without crowding the header.
 
 ### Fixed
 
