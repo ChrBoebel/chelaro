@@ -6,6 +6,7 @@ import { BankConnectionSetup } from "@/components/bank-connection";
 import { BrandMark } from "@/components/brand-mark";
 import { DocumentInbox } from "@/components/document-inbox";
 import { DesktopUpdateButton } from "@/components/desktop-update-button";
+import { DesktopVersion } from "@/components/desktop-version";
 import { FinanceAssistant } from "@/components/finance-assistant";
 import { InvoiceWorkbook } from "@/components/invoice-workbook";
 import { PersonalDashboard } from "@/components/personal-dashboard";
@@ -83,6 +84,8 @@ export function WorkspaceShell() {
         ) : (
           <InvoiceWorkbook />
         )}
+
+        <DesktopVersion />
       </div>
     </main>
   );

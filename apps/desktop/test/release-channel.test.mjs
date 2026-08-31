@@ -82,7 +82,7 @@ test("the free update release uses one synchronized higher product version", asy
     JSON.parse(await readFile(file, "utf8"))
   ));
 
-  assert.deepEqual(packages.map(({ version }) => version), ["0.3.5", "0.3.5", "0.3.5"]);
+  assert.deepEqual(packages.map(({ version }) => version), ["0.3.7", "0.3.7", "0.3.7"]);
 });
 
 test("every pull request to main must increase the synchronized product version", async () => {

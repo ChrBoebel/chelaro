@@ -8,9 +8,13 @@ const UPDATE_CHANNELS = Object.freeze({
   openReleasePage: "finance-os:update:open-release-page",
   stateChanged: "finance-os:update:state-changed",
 });
+const RUNTIME_VERSION_CHANNEL = "finance-os:runtime:get-version";
 
 contextBridge.exposeInMainWorld("financeOS", {
   platform: process.platform,
+  runtime: {
+    getVersion: () => ipcRenderer.invoke(RUNTIME_VERSION_CHANNEL),
+  },
   updates: {
     getState: () => ipcRenderer.invoke(UPDATE_CHANNELS.getState),
     check: () => ipcRenderer.invoke(UPDATE_CHANNELS.check),

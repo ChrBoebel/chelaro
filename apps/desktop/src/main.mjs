@@ -24,6 +24,7 @@ const repoRoot = path.resolve(currentDirectory, "../../..");
 const desktopIconPath = path.join(app.getAppPath(), "assets/icon.png");
 const preloadPath = path.join(currentDirectory, "preload.cjs");
 const processManager = createProcessManager({ repoRoot });
+const RUNTIME_VERSION_CHANNEL = "finance-os:runtime:get-version";
 const financeAssistantE2e = process.env.FINANCE_OS_E2E_SCENARIO === "finance-assistant";
 const desktopUpdateE2e = !app.isPackaged && process.env.FINANCE_OS_E2E_SCENARIO === "desktop-update";
 const e2eDataRoot = financeAssistantE2e || desktopUpdateE2e
@@ -88,7 +89,6 @@ async function bootstrap() {
       ? await startPackagedFinanceServices(processManager, {
           resourcesPath: process.resourcesPath,
           userDataPath: app.getPath("userData"),
-          executablePath: process.execPath,
           userHome: app.getPath("home"),
         })
       : await startFinanceServices(processManager, {
@@ -120,6 +120,7 @@ async function bootstrap() {
     } else if (desktopUpdateE2e && e2eDataRoot) {
       await updateManager.check();
       const result = await runUpdateFlowE2e(mainWindow, {
+        applicationVersion: app.getVersion(),
         dataRoot: e2eDataRoot,
         evidence: updateE2eEvidence,
       });
@@ -196,6 +197,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     if (process.platform === "darwin") app.dock.setIcon(desktopIconPath);
+    ipcMain.handle(RUNTIME_VERSION_CHANNEL, () => app.getVersion());
     app.setAboutPanelOptions({
       applicationName: "Chelaro",
       applicationVersion: app.getVersion(),

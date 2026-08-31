@@ -20,11 +20,15 @@ Nur der geschützte Tag-Workflow darf eine DMG zusammen mit `SHA256SUMS.txt` ver
 ist ein manueller Download- und Installationskanal, kein Squirrel- oder `electron-updater`-Kanal.
 Der eingebettete API-Helfer verwendet den PyInstaller-Konsolen-Bootloader und läuft als
 Hintergrundprozess, ohne als zweite Anwendung im macOS Dock zu erscheinen.
+Auch der eingebettete Next.js-Server wird über den als `LSUIElement` markierten Electron-Helper
+gestartet, damit im Dock ausschließlich die eigentliche Chelaro-App sichtbar ist.
 
 ## Updateablauf
 
 - Bestehende `0.2.x`-Apps benötigen einmalig die manuelle `0.3.4`-Installation aus der GitHub-DMG.
 - Ab `0.3.4` prüft Chelaro den neuesten stabilen GitHub Release beim Start und alle sechs Stunden.
+- Eine dezente Fußzeile zeigt die tatsächlich installierte Bundle-Version an; sie stammt direkt aus
+  Electron und benötigt keine separat gepflegte UI-Versionsnummer.
 - Nur die exakt erwartete `Chelaro-X.Y.Z-arm64.dmg` und `SHA256SUMS.txt` werden akzeptiert.
 - Chelaro prüft Größe und SHA-256-Prüfsumme und setzt die macOS-Quarantänemarkierung, bevor es die
   DMG öffnen kann.
