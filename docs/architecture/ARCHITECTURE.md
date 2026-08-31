@@ -93,6 +93,14 @@ Every call is bound to the active session, turn, call ID, consent version, and b
 fields remain untrusted prompt content. The App Server itself remains a trusted same-user control-
 plane dependency; this residual risk and the shared-login boundary are accepted in ADR 0011.
 
+Chelaro stores the complete visible user/assistant transcript in its own local database and keeps an
+opaque Codex thread binding per conversation. New provider threads are persistent; later app epochs
+resume that exact thread with the same restrictive contract and without hydrating provider turns
+into the UI. The renderer reads paginated Chelaro history independently of Agent Host availability.
+Reasoning, stream chunks, raw finance-tool results, and raw provider activities are never persisted.
+Conversation mutations and terminal turns emit content-free audit events in the same transaction.
+ADR 0013 defines deletion and consent semantics for this dual local store.
+
 ### Desktop renderer
 
 Electron runs with context isolation and sandboxing enabled and Node.js integration disabled.
@@ -137,6 +145,8 @@ See [Release Process](../releases/RELEASE_PROCESS.md) and
 
 - automated backup and tested restore are not implemented;
 - local database encryption and Keychain-backed credential storage are not implemented;
+- locally retained assistant transcripts are therefore private-by-permissions but not encrypted at
+  rest;
 - OCR is still in development;
 - the Finance Assistant is verified in a local unsigned macOS 15.6 arm64 package and remains
   fail-closed without the exact supported Codex CLI; a signed public package is still pending;
