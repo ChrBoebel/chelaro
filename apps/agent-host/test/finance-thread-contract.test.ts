@@ -66,6 +66,8 @@ test("finance thread disables every non-finance capability and contains finance-
   assert.match(params.developerInstructions ?? "", /direkte Werkzeugaufrufe/);
   assert.match(params.developerInstructions ?? "", /Programmatic Tool Calling/);
   assert.match(params.developerInstructions ?? "", /exec/);
+  assert.match(params.developerInstructions ?? "", /ohne zusätzliche Bestätigung/);
+  assert.match(params.developerInstructions ?? "", /optionales Fälligkeitsdatum/);
   assert.match(params.developerInstructions ?? "", /exakt aus der Nutzereingabe/);
   assert.match(params.developerInstructions ?? "", /ohne Markdown-Markierungen/);
 });
