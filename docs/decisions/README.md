@@ -17,6 +17,7 @@ Ersetzte Entscheidungen bleiben verfügbar und verweisen auf ihre Nachfolgeentsc
 | [0010](0010-codex-powered-finance-assistant.md) | Codex-gestützter Finanzassistent |
 | [0011](0011-reuse-system-codex-authentication.md) | System-Codex und bestehende Anmeldung wiederverwenden |
 | [0012](0012-isolated-code-mode-finance-routing.md) | Isolierter GPT-5.6-Router für acht Finanzfunktionen |
+| [0013](0013-durable-local-assistant-conversations.md) | Dauerhafte lokale Assistenz-Unterhaltungen |
 
 Für eine Entscheidung, die eine Produktinvariante, Vertrauensgrenze, das Speichermodell, eine
 Release-Grenze oder einen irreversiblen Kompatibilitätsvertrag verändert, wird die nächste

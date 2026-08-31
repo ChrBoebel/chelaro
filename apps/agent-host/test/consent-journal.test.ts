@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, test } from "node:test";
@@ -13,6 +21,12 @@ import {
   FinanceConsentJournal,
   FinanceConsentJournalError,
 } from "../src/consent-journal.js";
+import {
+  LEGACY_FINANCE_CONSENT_VERSION,
+  hashCore,
+  legacyConsentGrantLine,
+  legacyConsentJournal,
+} from "./consent-fixtures.js";
 
 const temporaryRoots: string[] = [];
 
@@ -61,6 +75,39 @@ test("consent journal: records an exact, owner-only, durable grant", () => {
   assert.match(record.recordHash, /^[a-f0-9]{64}$/);
 });
 
+test("consent journal: grants the current notice while preserving a valid legacy audit journal", () => {
+  const { journal, path, root } = fixture();
+  const legacyContents = legacyConsentGrantLine();
+  mkdirSync(join(root, "private"), { mode: 0o700 });
+  writeFileSync(path, legacyContents, { mode: 0o600 });
+
+  assert.deepEqual(journal.load(), {
+    denialReason: "unsupported_version",
+    sequence: 1,
+    status: "revoked",
+    version: LEGACY_FINANCE_CONSENT_VERSION,
+  });
+  assert.throws(() => journal.assertGranted(LEGACY_FINANCE_CONSENT_VERSION));
+  assert.throws(() => journal.assertGranted(FINANCE_CONSENT_VERSION));
+
+  const granted = journal.grant();
+
+  assert.deepEqual(granted, {
+    denialReason: null,
+    sequence: 2,
+    status: "granted",
+    version: FINANCE_CONSENT_VERSION,
+  });
+  assert.doesNotThrow(() => journal.assertGranted(FINANCE_CONSENT_VERSION));
+  const [legacyRecord, currentRecord] = readFileSync(path, "utf8").trimEnd().split("\n");
+  assert.equal(`${legacyRecord}\n`, legacyContents);
+  assert.equal(JSON.parse(currentRecord!).previousHash, JSON.parse(legacyRecord!).recordHash);
+
+  const restarted = new FinanceConsentJournal({ journalPath: path });
+  assert.deepEqual(restarted.load(), granted);
+  assert.doesNotThrow(() => restarted.assertGranted(FINANCE_CONSENT_VERSION));
+});
+
 test("consent journal: revoke-pending remains the authoritative deny barrier after restart", () => {
   const { journal, path } = fixture();
   journal.grant();
@@ -76,6 +123,53 @@ test("consent journal: revoke-pending remains the authoritative deny barrier aft
   assert.throws(() => restarted.assertGranted(FINANCE_CONSENT_VERSION));
   assert.equal(restarted.completeRevocation().status, "revoked");
   assert.equal(restarted.completeRevocation().sequence, 3);
+});
+
+test("consent journal: completes a legacy revocation before an explicit current grant", () => {
+  const { journal, path, root } = fixture();
+  mkdirSync(join(root, "private"), { mode: 0o700 });
+  writeFileSync(path, legacyConsentJournal(["grant", "revoke_pending"]), { mode: 0o600 });
+
+  assert.equal(journal.load().status, "revoked");
+  const granted = journal.grant();
+
+  assert.deepEqual(granted, {
+    denialReason: null,
+    sequence: 4,
+    status: "granted",
+    version: FINANCE_CONSENT_VERSION,
+  });
+  const records = readFileSync(path, "utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
+  assert.deepEqual(records.map((record) => [record.consentVersion, record.action]), [
+    [LEGACY_FINANCE_CONSENT_VERSION, "grant"],
+    [LEGACY_FINANCE_CONSENT_VERSION, "revoke_pending"],
+    [LEGACY_FINANCE_CONSENT_VERSION, "revoke_complete"],
+    [FINANCE_CONSENT_VERSION, "grant"],
+  ]);
+  for (let index = 1; index < records.length; index += 1) {
+    assert.equal(records[index].previousHash, records[index - 1].recordHash);
+  }
+});
+
+test("consent journal: rejects a fully rehashed downgrade from current to legacy consent", () => {
+  const { journal, path } = fixture();
+  journal.grant();
+  const currentContents = readFileSync(path, "utf8");
+  const currentRecord = JSON.parse(currentContents);
+  const { recordHash: _legacyHash, ...legacyCore } = JSON.parse(legacyConsentGrantLine());
+  Object.assign(legacyCore, {
+    occurredAt: "2026-08-28T10:01:00.000Z",
+    previousHash: currentRecord.recordHash,
+    sequence: 2,
+  });
+  writeFileSync(path, `${currentContents}${JSON.stringify({
+    ...legacyCore,
+    recordHash: hashCore(legacyCore),
+  })}\n`, { mode: 0o600 });
+
+  assert.equal(journal.load().denialReason, "invalid_journal");
+  assert.throws(() => journal.grant());
+  assert.equal(readFileSync(path, "utf8").trimEnd().split("\n").length, 2);
 });
 
 test("consent journal: detects a truncated tail and never revives the prior grant", () => {

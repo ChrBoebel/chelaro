@@ -11,6 +11,19 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.4.1] - 2026-08-31
+
+### Fixed
+
+- Existing `2026-08-28.v1` assistant consent no longer blocks the explicit
+  `2026-08-31.v2` re-consent required by the durable conversation update.
+
+### Security
+
+- The prior consent record remains in the same tamper-evident hash chain, but never authorizes the
+  current data notice. Only an explicit click appends the new grant; unknown or manipulated consent
+  versions continue to fail closed.
+
 ## [0.4.0] - 2026-08-31
 
 ### Added

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -14,6 +14,7 @@ import {
 } from "../src/finance-agent-service.js";
 import { FinanceConsentJournal } from "../src/consent-journal.js";
 import type { FinanceToolApi } from "../src/finance-tool-dispatcher.js";
+import { legacyConsentGrantLine } from "./consent-fixtures.js";
 
 type Callbacks = Parameters<NonNullable<FinanceAgentServiceOptions["processFactory"]>>[0];
 
@@ -156,6 +157,39 @@ function fixture() {
     service,
   };
 }
+
+test("finance agent service: legacy consent stays denied until an explicit current grant", async (t) => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "finance-agent-service-legacy-")));
+  const consentPath = join(root, "private", "consent.ndjson");
+  mkdirSync(join(root, "private"), { mode: 0o700 });
+  writeFileSync(consentPath, legacyConsentGrantLine(), { mode: 0o600 });
+  const service = new FinanceAgentService({
+    codexProvider: {
+      binaryPath: "missing-codex",
+      codexHome: root,
+      home: root,
+      path: "/usr/bin:/bin",
+    },
+    consentJournal: new FinanceConsentJournal({ journalPath: consentPath }),
+    emit: () => undefined,
+    runtimeDirectory: root,
+    temporaryDirectory: root,
+  });
+  t.after(async () => { await service.stop(); rmSync(root, { force: true, recursive: true }); });
+
+  await service.start();
+  assert.deepEqual(service.snapshot().consent, {
+    status: "revoked",
+    version: "2026-08-28.v1",
+  });
+  assert.equal(service.snapshot().appServer, "stopped");
+  assert.equal(service.snapshot().provider.status, "checking");
+
+  await service.grantConsent();
+  assert.equal(service.snapshot().consent.status, "granted");
+  assert.equal(service.snapshot().appServer, "stopped");
+  assert.equal(service.snapshot().provider.status, "not_found");
+});
 
 async function readyService(state: ReturnType<typeof fixture>): Promise<void> {
   await state.service.start();
