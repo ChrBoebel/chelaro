@@ -855,6 +855,14 @@ class AssistantProviderRuntime(Base):
     __tablename__ = "assistant_provider_runtime"
     __table_args__ = (
         CheckConstraint("provider_name IN ('codex')", name="ck_assistant_runtime_provider"),
+        CheckConstraint(
+            "provider_effort IN ('low', 'medium', 'high')",
+            name="ck_assistant_runtime_effort",
+        ),
+        CheckConstraint(
+            "provider_service_tier IN ('default', 'priority')",
+            name="ck_assistant_runtime_service_tier",
+        ),
     )
 
     conversation_id: Mapped[int] = mapped_column(
@@ -868,6 +876,9 @@ class AssistantProviderRuntime(Base):
         server_default="codex",
     )
     provider_thread_id: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    provider_model: Mapped[str] = mapped_column(String(128), nullable=False)
+    provider_effort: Mapped[str] = mapped_column(Text, nullable=False)
+    provider_service_tier: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

@@ -1,6 +1,6 @@
 {
   "name": "finance-os",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "private": true,
   "packageManager": "pnpm@10.32.1",
   "engines": {

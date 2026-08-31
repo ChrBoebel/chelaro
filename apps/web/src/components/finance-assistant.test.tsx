@@ -8,9 +8,17 @@ const baseSnapshot = {
   auth: "logged_out",
   consent: { status: "unknown", version: null },
   host: "ready",
+  models: {
+    available: [
+      { efforts: ["low", "medium", "high"], model: "gpt-5.5", supportsFastMode: true },
+      { efforts: ["low", "medium", "high"], model: "gpt-5.4-mini", supportsFastMode: false },
+    ],
+    selected: { effort: "medium", fastMode: false, model: "gpt-5.5" },
+  },
   provider: { status: "ready", version: "0.151.0" },
   session: null,
   turn: null,
+  usage: null,
 };
 
 class TestEventSource {
@@ -255,6 +263,70 @@ describe("FinanceAssistant", () => {
     expect(await screen.findByText("Lokal gespeicherte Antwort")).toBeDefined();
   });
 
+  it("offers the suggestions as controls and shows the bound configuration while chatting", async () => {
+    const authenticated = {
+      ...baseSnapshot,
+      auth: "authenticated",
+      consent: { status: "granted", version: "2026-08-31.v2" },
+      models: {
+        ...baseSnapshot.models,
+        selected: { effort: "high", fastMode: true, model: "gpt-5.5" },
+      },
+      session: { conversationId: null, id: "session_test_2", status: "ready" },
+      usage: { compactions: 2, contextWindow: 200_000, totalTokens: 40_000, usedTokens: 50_000 },
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ snapshot: authenticated })));
+
+    render(<FinanceAssistant />);
+
+    // The configuration is bound for the whole conversation, so it stays
+    // readable after the picker is gone.
+    expect(await screen.findByText("gpt-5.5")).toBeDefined();
+    expect(screen.getByText(/Fast Mode/)).toBeDefined();
+    expect(screen.getByText(/Kontext 25 %/)).toBeDefined();
+    expect(screen.getByText(/2× verdichtet/)).toBeDefined();
+
+    const suggestion = screen.getByRole("button", { name: "Wie war mein Monat?" });
+    fireEvent.click(suggestion);
+    const prompt = screen.getByLabelText("Frage an den Finanzassistenten");
+    expect((prompt as HTMLTextAreaElement).value).toBe("Wie war mein Monat?");
+  });
+
+  it("names the reason a rejected action failed instead of suggesting a retry", async () => {
+    const authenticated = {
+      ...baseSnapshot,
+      auth: "authenticated",
+      consent: { status: "granted", version: "2026-08-31.v2" },
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/assistant/conversations")) {
+        return init?.method === "POST"
+          ? jsonResponse({
+              data: {
+                id: "123e4567-e89b-42d3-a456-426614174002",
+                message_count: 0,
+                status: "active",
+                title: "Neue Unterhaltung",
+                updated_at: "2026-09-01T12:00:00Z",
+                version: 1,
+              },
+            }, 201)
+          : jsonResponse({ data: [] });
+      }
+      if (url.endsWith("/api/assistant/sessions")) {
+        return jsonResponse({ error: { code: "model_not_available" } }, 409);
+      }
+      return jsonResponse({ snapshot: authenticated });
+    }));
+
+    render(<FinanceAssistant />);
+    const [startButton] = await screen.findAllByRole("button", { name: "Neue Unterhaltung" });
+    fireEvent.click(startButton);
+
+    expect(await screen.findByText(/Das gewählte Modell bietet Codex gerade nicht an/)).toBeDefined();
+  });
+
   it("continues a selected local conversation with its exact conversation id", async () => {
     const conversationId = "123e4567-e89b-42d3-a456-426614174000";
     const authenticated = {
@@ -301,6 +373,17 @@ describe("FinanceAssistant", () => {
         method: "POST",
       }),
     ));
+
+    const sessionCall = (
+      fetchMock.mock.calls as unknown as Array<[string, RequestInit | undefined]>
+    ).find(([url]) => typeof url === "string" && url.endsWith("/api/assistant/sessions"));
+    // The renderer must name the configuration explicitly; an absent selection
+    // would let the host fall back instead of binding a verified one.
+    expect(JSON.parse(String(sessionCall?.[1]?.body)).model_selection).toEqual({
+      effort: "medium",
+      fast_mode: false,
+      model: "gpt-5.5",
+    });
   });
 });
 

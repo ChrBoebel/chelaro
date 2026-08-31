@@ -18,6 +18,8 @@ import {
   buildFinanceInitializeParams,
   buildFinanceThreadStartParams,
   configuredMcpServerNames,
+  DEFAULT_FINANCE_MODEL_SELECTION,
+  FINANCE_SUPPORTED_MODELS,
 } from "../src/finance-thread-contract.js";
 import { JsonRpcClient } from "../src/json-rpc-client.js";
 
@@ -26,7 +28,12 @@ const codexEntry = resolve(
   "../../node_modules/@openai/codex/bin/codex.js",
 );
 
-test("provider edge: real App Server exposes exactly the eight finance tools", async () => {
+// Every allowlisted model is verified separately: the tool-routing path is a
+// property of the model, not of the thread contract. GPT-5.6 routes through
+// Code Mode and declares collaboration tools at the provider edge, which is
+// why it is not on the allowlist.
+for (const model of FINANCE_SUPPORTED_MODELS) {
+test(`provider edge: real App Server exposes exactly the eight finance tools on ${model}`, async () => {
   const requests: Array<{ body: unknown; method: string; url: string }> = [];
   const provider = await startServer(async (request, response) => {
     const body = await readJsonBody(request);
@@ -101,7 +108,10 @@ test("provider edge: real App Server exposes exactly the eight finance tools", a
     });
     const started = await rpc.request(
       "thread/start",
-      buildFinanceThreadStartParams(undefined, configuredMcpServerNames(configuration)),
+      buildFinanceThreadStartParams(
+        { ...DEFAULT_FINANCE_MODEL_SELECTION, model },
+        configuredMcpServerNames(configuration),
+      ),
     ) as {
       thread: { id: string };
     };
@@ -115,8 +125,18 @@ test("provider edge: real App Server exposes exactly the eight finance tools", a
 
     const responseRequests = requests.filter(({ method, url }) => method === "POST" && url === "/v1/responses");
     assert.equal(responseRequests.length, 1);
-    const body = responseRequests[0]?.body as { tools?: unknown[] };
+    const body = responseRequests[0]?.body as {
+      input?: Array<{ type?: string }>;
+      tools?: unknown[];
+    };
     assert.deepEqual(body.tools, expectedProviderTools());
+    // A Code Mode model would carry its tool surface in `additional_tools`
+    // instead, hiding whatever it declares there from the assertion above.
+    assert.equal(
+      (body.input ?? []).some((entry) => entry.type === "additional_tools"),
+      false,
+      `${model} routed tools through Code Mode instead of direct function calls`,
+    );
   } finally {
     rpc.close();
     child.kill("SIGTERM");
@@ -127,6 +147,7 @@ test("provider edge: real App Server exposes exactly the eight finance tools", a
     rmSync(temporaryRoot, { recursive: true, force: true });
   }
 });
+}
 
 function expectedProviderTools(): unknown[] {
   return FINANCE_DYNAMIC_TOOLS.map((tool) => {

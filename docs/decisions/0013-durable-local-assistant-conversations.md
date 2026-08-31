@@ -26,6 +26,11 @@ data store. It must also keep Chelaro's proposal-only mutation boundary unchange
   Chelaro's database, not provider history hydration, is the UI source of truth.
 - Do not silently replace a missing or incompatible provider thread with a new one. Surface context
   loss so the user can make an explicit choice.
+- Let a resumed thread reattach to the identifier it was bound to. The host's per-epoch identifier
+  ledger rejects a reused identifier because a provider that reuses one can confuse two resources;
+  a resumed conversation, however, necessarily names its own thread again. The ledger therefore
+  records the role each identifier was seen in and only rejects a change of role, so reopening a
+  conversation works within one application run instead of only after a restart.
 - Continue exposing exactly eight bounded finance tools. Persistent threads additionally require
   the built-in Codex `goals` feature to be disabled; the provider-manifest test remains exact.
 - Paginate reads without imposing a retention count. Users can rename, archive, restore, and

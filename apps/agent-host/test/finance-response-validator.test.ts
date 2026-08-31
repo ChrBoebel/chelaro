@@ -18,13 +18,13 @@ function safeThread(runtimeDirectory: string): Record<string, unknown> {
     approvalsReviewer: "user",
     cwd: runtimeDirectory,
     instructionSources: [],
-    model: "gpt-test",
+    model: "gpt-5.5",
     modelProvider: "openai",
     multiAgentMode: "explicitRequestOnly",
-    reasoningEffort: null,
+    reasoningEffort: "medium",
     runtimeWorkspaceRoots: [],
     sandbox: { networkAccess: false, type: "readOnly" },
-    serviceTier: null,
+    serviceTier: "default",
     thread: {
       agentNickname: null,
       agentRole: null,
@@ -63,6 +63,36 @@ test("finance response validator: accepts the exact pinned read-only thread proj
   }
 });
 
+test("finance response validator: binds the thread to the requested model configuration", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "finance-response-")));
+  try {
+    const fast = {
+      ...safeThread(root),
+      model: "gpt-5.5",
+      reasoningEffort: "high",
+      serviceTier: "priority",
+    };
+    assert.doesNotThrow(() =>
+      assertSafeFinanceThreadResponse(fast, root, "start", {
+        effort: "high",
+        fastMode: true,
+        model: "gpt-5.5",
+      }),
+    );
+    // Fast mode requested, standard tier delivered: the silent downgrade must
+    // not pass as a verified thread.
+    assert.throws(() =>
+      assertSafeFinanceThreadResponse({ ...fast, serviceTier: "default" }, root, "start", {
+        effort: "high",
+        fastMode: true,
+        model: "gpt-5.5",
+      }),
+    );
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+});
+
 test("finance response validator: rejects each security-relevant thread relaxation", () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "finance-response-")));
   try {
@@ -78,6 +108,13 @@ test("finance response validator: rejects each security-relevant thread relaxati
       { ...safe, sandbox: { type: "dangerFullAccess" } },
       { ...safe, modelProvider: "custom" },
       { ...safe, futureSecurityField: true },
+      // Codex accepts an unknown model, effort, or tier without an error and
+      // reports a substituted or null value instead.
+      { ...safe, model: "gpt-5.4" },
+      { ...safe, reasoningEffort: "high" },
+      { ...safe, reasoningEffort: null },
+      { ...safe, serviceTier: "priority" },
+      { ...safe, serviceTier: null },
       { ...safe, thread: { ...(safe.thread as object), ephemeral: true } },
       { ...safe, thread: { ...(safe.thread as object), path: null } },
       { ...safe, thread: { ...(safe.thread as object), parentThreadId: "parent" } },

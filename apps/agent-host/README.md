@@ -6,6 +6,15 @@ Dateien, Prozesse, Browser-, Web- oder Netzwerk-Werkzeuge. Da GPT-5.6 Werkzeugau
 Mode routet, ist dessen isolierter Host aktiv; sein `tools`-Objekt enthält ausschließlich die acht
 Finanzfunktionen und hat keinen Node-, Shell-, Datei- oder Netzwerkzugriff.
 
+## Modellkonfiguration
+
+Modell, Denktiefe und Service Tier werden bei jedem `thread/start` und `thread/resume` explizit
+gesendet und nie aus `~/.codex/config.toml` geerbt. Ein Thread gilt erst als konfiguriert, wenn die
+Antwort genau die angeforderten Werte zurückmeldet — der App Server nimmt unbekannte Werte
+kommentarlos an und ersetzt sie still. Angeboten werden nur Modelle aus `FINANCE_SUPPORTED_MODELS`,
+deren Provider-Rand nachweislich ausschließlich die acht Finanzfunktionen zeigt. Details in
+[ADR 0014](../../docs/decisions/0014-explicit-finance-model-selection.md).
+
 ## Autoritätsmodell
 
 - Lesende Werkzeuge liefern typisierte Finanzdaten.
@@ -31,4 +40,5 @@ Login oder Logout und liest keine `auth.json`. Die realen App-Server-Tests laufe
 
 Weitere Details: [Finanzassistent-Architektur](../../docs/architecture/ARCHITECTURE.md) ·
 [Threat Model](../../docs/security/THREAT_MODEL.md) ·
-[ADR 0011](../../docs/decisions/0011-reuse-system-codex-authentication.md)
+[ADR 0011](../../docs/decisions/0011-reuse-system-codex-authentication.md) ·
+[ADR 0014](../../docs/decisions/0014-explicit-finance-model-selection.md)

@@ -32,7 +32,7 @@ test("finance thread opts into only the required experimental API", () => {
 });
 
 test("finance thread has no environment and exactly eight immutable direct finance tools", () => {
-  const params = buildFinanceThreadStartParams("gpt-5.6");
+  const params = buildFinanceThreadStartParams({ effort: "medium", fastMode: false, model: "gpt-5.5" });
   assert.deepEqual(params.environments, []);
   assert.equal(params.dynamicTools, FINANCE_DYNAMIC_TOOLS);
   assert.equal(params.dynamicTools.length, 8);
@@ -132,5 +132,15 @@ test("finance thread validation rejects extra fields, environments, and changed 
   ]) {
     assert.throws(() => assertFinanceThreadStartParams(invalid), FinanceThreadContractError);
   }
-  assert.throws(() => buildFinanceThreadStartParams("invalid model name"), FinanceThreadContractError);
+  for (const invalidSelection of [
+    { effort: "medium", fastMode: false, model: "invalid model name" },
+    { effort: "ultra", fastMode: false, model: "gpt-5.5" },
+    { effort: "medium", fastMode: "yes", model: "gpt-5.5" },
+    { effort: "medium", model: "gpt-5.5" },
+  ]) {
+    assert.throws(
+      () => buildFinanceThreadStartParams(invalidSelection as never),
+      FinanceThreadContractError,
+    );
+  }
 });

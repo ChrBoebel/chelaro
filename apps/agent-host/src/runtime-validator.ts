@@ -6,6 +6,7 @@ import type { ServerNotification } from "../generated/codex/ts/ServerNotificatio
 import type { InitializeResponse } from "../generated/codex/ts/InitializeResponse.js";
 import type { GetAccountResponse } from "../generated/codex/ts/v2/GetAccountResponse.js";
 import type { LoginAccountResponse } from "../generated/codex/ts/v2/LoginAccountResponse.js";
+import type { ModelListResponse } from "../generated/codex/ts/v2/ModelListResponse.js";
 import type { ThreadStartResponse } from "../generated/codex/ts/v2/ThreadStartResponse.js";
 import type { ThreadResumeResponse } from "../generated/codex/ts/v2/ThreadResumeResponse.js";
 import type { TurnStartResponse } from "../generated/codex/ts/v2/TurnStartResponse.js";
@@ -53,6 +54,9 @@ const validateThreadResumeResponseSchema = compileSchema(
 );
 const validateTurnStartResponseSchema = compileSchema(
   "../../generated/codex/schema/v2/TurnStartResponse.json",
+);
+const validateModelListResponseSchema = compileSchema(
+  "../../generated/codex/schema/v2/ModelListResponse.json",
 );
 
 export class ProtocolValidationError extends Error {
@@ -107,6 +111,10 @@ export function validateThreadResumeResponse(value: unknown): asserts value is T
 
 export function validateTurnStartResponse(value: unknown): asserts value is TurnStartResponse {
   validateWithSchema(value, validateTurnStartResponseSchema, "Codex TurnStartResponse");
+}
+
+export function validateModelListResponse(value: unknown): asserts value is ModelListResponse {
+  validateWithSchema(value, validateModelListResponseSchema, "Codex ModelListResponse");
 }
 
 function compileSchema(relativePath: string): ValidateFunction {

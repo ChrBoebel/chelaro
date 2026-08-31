@@ -11,6 +11,49 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.5.0] - 2026-09-01
+
+### Added
+
+- The finance assistant exposes model, reasoning effort, and Fast Mode. The choice is bound to the
+  conversation, stored with its provider thread, and reused when the conversation is resumed.
+- The chat header names the model, effort, and Fast Mode the open conversation actually runs on, and
+  offers **Konfiguration ändern** to rebind it.
+- The assistant shows token usage and how full the model context window is, and says when Codex has
+  condensed the history. Fast Mode raises usage, which was previously invisible.
+- Answers can be copied, a failed or interrupted question can be resent, and the example questions
+  are now buttons that fill the input field.
+
+### Fixed
+
+- Reopening a conversation works within one application run. Continuing a conversation previously
+  failed with a conflict until Chelaro was restarted, which contradicted ADR 0013.
+- A rejected assistant action now names its reason — missing Codex login, an unavailable model, a
+  running turn — instead of always suggesting a retry that could not succeed.
+- An existing local database created before the explicit model selection is migrated instead of
+  failing on the missing columns. The desktop schema moves to version 5.
+
+### Changed
+
+- Chelaro now sends the model, reasoning effort, and service tier explicitly on every thread start
+  and resume instead of inheriting them from the owner's personal `~/.codex/config.toml`. Assistant
+  conversations previously ran on whatever that file declared.
+- The default configuration is GPT-5.5 at medium effort with Fast Mode off. Fast Mode maps to the
+  Codex `priority` tier, which Codex describes as 1.5x speed at increased usage.
+
+### Security
+
+- A thread is accepted only when Codex echoes back exactly the requested model, effort, and service
+  tier. The App Server accepts unknown values without an error and silently substitutes them, so the
+  request alone is not evidence of the running configuration.
+- The GPT-5.6 family is not offered. It declares collaboration and agent-spawning tools at the
+  provider edge that the pinned App Server cannot disable, which ADR 0010 forbids. The provider-edge
+  manifest test now runs once per offered model.
+- `model/rerouted` and `model/verification` notifications now abort the turn.
+- The host identifier ledger now records the role each identifier was seen in. A resumed provider
+  thread may reattach; the same identifier appearing as a session or turn identifier is still
+  refused.
+
 ## [0.4.1] - 2026-08-31
 
 ### Fixed
