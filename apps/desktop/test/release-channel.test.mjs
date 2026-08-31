@@ -45,12 +45,14 @@ test("GitHub publishes the DMG and checksum without Apple credentials", async ()
     "xcrun stapler",
     "latest-mac.yml",
     "*.zip.blockmap",
+    "pnpm release:check --",
   ]) {
     assert.doesNotMatch(workflow, new RegExp(escapeRegex(forbidden)));
   }
   for (const required of [
     "environment: macos-release",
     "pnpm quality",
+    "pnpm release:check \"$GITHUB_REF_NAME\"",
     "pnpm package:desktop",
     "hdiutil verify",
     "shasum -a 256 Chelaro-*.dmg",

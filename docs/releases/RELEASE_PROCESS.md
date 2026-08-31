@@ -109,7 +109,7 @@ After the release PR is merged and CI is green:
 ```bash
 git switch main
 git pull --ff-only origin main
-pnpm release:check -- vX.Y.Z
+pnpm release:check vX.Y.Z
 git tag -s vX.Y.Z -m "Chelaro vX.Y.Z"
 git push origin vX.Y.Z
 ```
