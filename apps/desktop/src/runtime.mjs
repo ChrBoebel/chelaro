@@ -521,7 +521,7 @@ function isExactRecord(value, expected) {
 
 export async function startPackagedFinanceServices(
   processManager,
-  { resourcesPath, userDataPath, executablePath, userHome, environment = process.env },
+  { resourcesPath, userDataPath, userHome, environment = process.env },
 ) {
   const apiPort = await findAvailablePort();
   let webPort = await findAvailablePort();
@@ -578,7 +578,7 @@ export async function startPackagedFinanceServices(
     );
   }
 
-  processManager.startExecutable("eingebettete Chelaro-Oberfläche", executablePath, [webServer], {
+  processManager.startForked("eingebettete Chelaro-Oberfläche", webServer, {
     cwd: path.dirname(webServer),
     env: {
       ...process.env,
