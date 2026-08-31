@@ -11,6 +11,18 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.3.3] - 2026-08-31
+
+### Changed
+
+- Published a separately versioned stable update target for the real `0.3.2` in-app GitHub update
+  journey.
+
+### Security
+
+- The release uses the same reviewed commit, version, checksum, quarantine, protected-environment,
+  and immutable-asset controls as the corrected bootstrap.
+
 ## [0.3.2] - 2026-08-31
 
 ### Fixed
