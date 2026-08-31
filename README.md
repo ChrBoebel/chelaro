@@ -11,7 +11,7 @@
   ohne Kontrolle über ihre Daten und Entscheidungen abzugeben.
 </p>
 
-<p align="center"><em>Öffentliche Source Preview · nicht produktionsreif · keine Downloads oder Releases · German-first</em></p>
+<p align="center"><em>Öffentliche Source Preview · nicht produktionsreif · unsigned macOS-Downloads · German-first</em></p>
 
 <p align="center">
   <a href="#aktueller-stand">Produkt</a> ·
@@ -32,7 +32,8 @@ Finanzdaten entstehen erst durch deterministische Validierung oder eine bewusste
 > **Projektstatus:** Dies ist eine öffentliche, experimentelle Source Preview. Der Quellcode steht
 > unter der PolyForm Noncommercial License 1.0.0; kommerzielle Nutzung erfordert eine separate
 > schriftliche Lizenz. Das Repository ist **source-available und nicht Open Source**. Es gibt keine
-> offiziellen Downloads, signierten Builds, Releases, Support- oder Produktionszusagen. Dieses
+> ausschließlich experimentelle unsigned Downloads und keine Apple-signierten Builds, Support-
+> oder Produktionszusagen. Dieses
 > Repository ist die einzige aktive Chelaro-Codebasis; der Arbeitsablauf ist unter
 > [Repository Operations](docs/operations/REPOSITORY.md) dokumentiert.
 
@@ -139,7 +140,7 @@ einen separaten Same-Origin-Gateway-Proxy. Codex erhält weder Shell, Dateien, W
 Coding-Werkzeuge außerhalb des isolierten Finanzwerkzeug-Routers. Seine vier schreibenden
 Finanzwerkzeuge erzeugen ausschließlich nicht-kanonische,
 prüfpflichtige Vorschläge; Änderungen bestehender Daten bleiben versionsgebunden. Die Freigabe im
-signierten Paket ist noch nicht abgeschlossen. Der REST-Zugriff für lokale externe Agents bleibt
+öffentlichen Paket bleibt eine experimentelle Preview. Der REST-Zugriff für lokale externe Agents bleibt
 davon getrennt.
 
 Interne Namen wie das `FINANCE_OS_*`-Konfigurationspräfix und das Python-Paket
@@ -189,9 +190,10 @@ Dienste und öffnet Chelaro in einem isolierten Electron-Fenster:
 pnpm dev:desktop
 ```
 
-Die Preview veröffentlicht derzeit noch keine DMG-, ZIP- oder sonstigen Binärartefakte. Der
-Paketierungs- und GitHub-Releasepfad ist implementiert, bleibt aber bis zur erfolgreichen Developer-
-ID-Signierung und Apple-Notarisierung ein nicht unterstützter Release-Kandidat.
+Der geschützte GitHub-Releasepfad kann eine experimentelle unsigned Apple-Silicon-DMG zusammen mit
+einer SHA-256-Prüfsummendatei veröffentlichen. Das ist kein Apple-signierter oder notarisierter
+Produktionsbuild; die kostenlose manuelle Installation und ihre Gatekeeper-Grenze sind unten
+dokumentiert.
 
 ### Datenpfad
 
@@ -207,16 +209,17 @@ verschoben werden.
 
 ## Updates und Releases
 
-Chelaro ist für einen öffentlichen GitHub-Releases-Updatekanal vorbereitet. Jeder zukünftige
-Release-Build enthält die Provider-Konfiguration; der Nutzer entscheidet weiterhin ausdrücklich
-über Download und Installation. Aktuell existieren noch keine signierten Downloads und kein
-GitHub Release, weil die Apple-Signing- und Notarisierungsdaten noch nicht konfiguriert sind.
+Chelaro verwendet einen kostenlosen öffentlichen GitHub-Releases-Kanal. Die macOS-App prüft beim
+Start und anschließend alle sechs Stunden, ob ein höheres stabiles Release existiert. Ein sichtbarer
+Hinweis führt durch Download, SHA-256-Prüfung und das Öffnen der DMG. Der Nutzer ersetzt die App
+anschließend selbst im Programme-Ordner; lokale Daten unter
+`~/Library/Application Support/Finance OS/` bleiben davon getrennt.
 
-Bestehende lokale `0.1.0`-Installationen enthalten kein `app-update.yml`; die vorhandene lokale
-`0.2.0` ist nur ad-hoc signiert. Beide sind deshalb kein gültiger macOS-Update-Ausgangspunkt. Eine
-Developer-ID-signierte `0.2.1` muss einmal manuell aus dem verifizierten DMG installiert werden.
-Erst danach kann der Update-Button eine höhere Version wie `0.2.2` laden. Der genaue Bootstrap-,
-Prüf- und Rollback-Ablauf steht im
+Die kostenlose DMG ist nicht mit einer Apple Developer ID signiert oder notarisiert. macOS kann
+deshalb beim ersten Start jeder neuen Version eine Sicherheitswarnung anzeigen. Der Update-Dialog
+erklärt den nötigen Rechtsklick-Öffnen-Schritt. Chelaro überschreibt sein App-Bundle niemals selbst
+und stellt diesen Ablauf nicht als automatisches oder von Apple verifiziertes Update dar. Der genaue
+Release-, Prüf- und Rollback-Ablauf steht im
 [macOS Release and Update Process](docs/releases/RELEASE_PROCESS.md).
 
 ## Sicherheit und Datenintegrität

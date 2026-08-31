@@ -20,7 +20,7 @@ flowchart LR
     AgentHost -->|eight tools + isolated router; no environment| Codex[Pinned Codex App Server]
     API --> DB[(PostgreSQL or SQLite)]
     API --> Originals[(Immutable document store)]
-    Desktop -->|explicit check and install| Updates[Signed HTTPS update channel]
+    Desktop -->|check + verified DMG download| Updates[Public GitHub Releases]
 ```
 
 The packaged macOS application starts the API and web runtime on dynamically allocated loopback
@@ -33,7 +33,7 @@ compatibility with earlier builds.
 | --- | --- | --- | --- |
 | Web interface | `apps/web` | Human review, same-origin mutations, local API proxy | Owner-facing |
 | Domain API | `apps/api` | Authorization, validation, canonical rules, persistence, audit events | Canonical boundary |
-| Desktop shell | `apps/desktop` | Isolated Electron window, local runtime, signed updates | Local launcher |
+| Desktop shell | `apps/desktop` | Isolated Electron window, local runtime, verified manual DMG updates | Local launcher |
 | Finance Agent Host | `apps/agent-host` | Verify and drive pinned Codex; enforce consent, session binding, budgets, and the exact eight-function finance surface | Trusted local control plane |
 | Document store | Configured local path | Content-addressed PDF, PNG, and JPEG originals | Immutable evidence |
 | Database | PostgreSQL or SQLite | Financial records, proposals, versions, audit history | Canonical state |
@@ -123,9 +123,12 @@ money storage; CI validates PostgreSQL migrations and rollback parity.
 
 ## Release boundary
 
-Public macOS builds must be Developer ID signed, hardened, notarized, and stapled. The update
-metadata is published only after versioned DMG and ZIP artifacts. The user explicitly starts the
-download and installation after Chelaro reports an available version.
+The free public macOS build is deliberately unsigned. A protected tag workflow publishes one
+versioned Apple-Silicon DMG and `SHA256SUMS.txt`; the client accepts only the fixed Chelaro GitHub
+repository, a higher stable Semantic Version, exact asset names, trusted HTTPS download hosts, the
+declared byte size, and the matching SHA-256 digest. The user explicitly downloads, opens, and
+installs the DMG. macOS Gatekeeper may require a manual override because checksum verification does
+not establish Apple Developer-ID trust.
 
 See [Release Process](../releases/RELEASE_PROCESS.md) and
 [Threat Model](../security/THREAT_MODEL.md).
@@ -137,8 +140,8 @@ See [Release Process](../releases/RELEASE_PROCESS.md) and
 - OCR is still in development;
 - the Finance Assistant is verified in a local unsigned macOS 15.6 arm64 package and remains
   fail-closed without the exact supported Codex CLI; a signed public package is still pending;
-- public CI guarantees and any future signed release would require a separate release decision,
-  working automation, and dedicated release secrets;
+- seamless in-place macOS updates remain unavailable until a future release decision funds and
+  configures Apple Developer-ID signing and notarization;
 - a compromised local operating-system account is outside the current protection boundary.
 
 Architecture changes that affect an invariant require an ADR in `docs/decisions`.
