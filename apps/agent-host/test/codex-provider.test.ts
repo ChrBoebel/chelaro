@@ -7,10 +7,11 @@ import test from "node:test";
 import {
   inspectCodexProvider,
   providerSnapshot,
-  SUPPORTED_CODEX_VERSION,
+  SCHEMA_CODEX_VERSION,
+  SUPPORTED_CODEX_VERSIONS,
 } from "../src/codex-provider.js";
 
-function fixture(version = SUPPORTED_CODEX_VERSION) {
+function fixture(version = SCHEMA_CODEX_VERSION) {
   const root = mkdtempSync(join(tmpdir(), "chelaro-codex-provider-"));
   const bin = join(root, "bin");
   const home = join(root, "home");
@@ -38,7 +39,7 @@ test("codex provider: discovers the user CLI and reuses its normal credential ho
       home: state.home,
       path: state.path,
     });
-    assert.deepEqual(provider.snapshot, providerSnapshot("ready", SUPPORTED_CODEX_VERSION));
+    assert.deepEqual(provider.snapshot, providerSnapshot("ready", SCHEMA_CODEX_VERSION));
     assert(provider.launch);
     assert.equal(provider.launch.binaryPath, realpathSync(state.executable));
     assert.equal(provider.launch.home, state.home);
@@ -80,6 +81,56 @@ test("codex provider: reports missing and unsupported installations without cras
   }
 });
 
+test("codex provider: the schema release is the newest verified one", () => {
+  // The checked-in schemas describe one release. Every other accepted release
+  // must be older, because that is what makes the compatibility argument hold:
+  // an older App Server sends a subset of the notifications and requests the
+  // checked-in schemas describe, so its messages still validate. A newer one
+  // could send shapes nobody reviewed, so raising the CLI means regenerating
+  // the schemas rather than widening this list.
+  const ordered = [...SUPPORTED_CODEX_VERSIONS].sort(descendingSemanticVersion);
+  assert.deepEqual([...SUPPORTED_CODEX_VERSIONS], ordered, "Verified releases must be listed newest first.");
+  assert.equal(SUPPORTED_CODEX_VERSIONS[0], SCHEMA_CODEX_VERSION);
+  assert.equal(new Set(SUPPORTED_CODEX_VERSIONS).size, SUPPORTED_CODEX_VERSIONS.length);
+});
+
+test("codex provider: accepts every verified release and still refuses the rest", () => {
+  assert(SUPPORTED_CODEX_VERSIONS.includes(SCHEMA_CODEX_VERSION));
+  for (const version of SUPPORTED_CODEX_VERSIONS) {
+    const state = fixture(version);
+    try {
+      const provider = inspectCodexProvider({
+        binaryPath: state.executable,
+        codexHome: state.codexHome,
+        home: state.home,
+        path: state.path,
+      });
+      assert.deepEqual(provider.snapshot, providerSnapshot("ready", version));
+      assert.equal(provider.launch?.version, version);
+    } finally {
+      state.cleanup();
+    }
+  }
+
+  for (const version of ["0.150.0", "0.153.0", "1.0.0"]) {
+    assert(!SUPPORTED_CODEX_VERSIONS.includes(version));
+    const state = fixture(version);
+    try {
+      assert.deepEqual(
+        inspectCodexProvider({
+          binaryPath: state.executable,
+          codexHome: state.codexHome,
+          home: state.home,
+          path: state.path,
+        }).snapshot,
+        providerSnapshot("unsupported", version),
+      );
+    } finally {
+      state.cleanup();
+    }
+  }
+});
+
 test("codex provider: rejects relative homes and never receives an auth file path", () => {
   assert.throws(() => inspectCodexProvider({
     binaryPath: "codex",
@@ -88,3 +139,12 @@ test("codex provider: rejects relative homes and never receives an auth file pat
     path: "/usr/bin",
   }), /absolute/);
 });
+
+function descendingSemanticVersion(left: string, right: string): number {
+  const leftParts = left.split(".").map(Number);
+  const rightParts = right.split(".").map(Number);
+  for (let index = 0; index < 3; index += 1) {
+    if (leftParts[index] !== rightParts[index]) return rightParts[index]! - leftParts[index]!;
+  }
+  return 0;
+}

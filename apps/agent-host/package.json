@@ -11,6 +11,7 @@
     "test:isolation": "pnpm build && node --test --test-name-pattern=isolation dist/test/isolation.test.js",
     "generate:codex-schema": "node scripts/generate-codex-schema.mjs",
     "check:codex-schema": "node scripts/generate-codex-schema.mjs --check",
+    "check:codex-compat": "node scripts/check-codex-compat.mjs",
     "check:codex-experimental-contract": "node scripts/check-experimental-contract.mjs"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
 import type { ServerNotification } from "../generated/codex/ts/ServerNotification.js";
 import type { ServerRequest } from "../generated/codex/ts/ServerRequest.js";
-import { SUPPORTED_CODEX_VERSION } from "../src/codex-provider.js";
+import { SCHEMA_CODEX_VERSION } from "../src/codex-provider.js";
 import { FinanceAgentService, type FinanceAgentServiceOptions } from "../src/finance-agent-service.js";
 import { FinanceApiClient } from "../src/finance-api-client.js";
 import { FinanceConsentJournal } from "../src/consent-journal.js";
@@ -244,7 +244,7 @@ function safeThread(runtimeDirectory: string): Record<string, unknown> {
     thread: {
       agentNickname: null,
       agentRole: null,
-      cliVersion: SUPPORTED_CODEX_VERSION,
+      cliVersion: SCHEMA_CODEX_VERSION,
       createdAt: 1,
       cwd: runtimeDirectory,
       ephemeral: false,

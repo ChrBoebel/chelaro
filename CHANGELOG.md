@@ -13,6 +13,21 @@ All notable Chelaro changes are recorded here. The format follows
 
 ## [0.5.1] - 2026-09-01
 
+### Added
+
+- Chelaro accepts a verified set of Codex releases instead of exactly one, so a Codex patch update
+  no longer stops the assistant the moment it lands. `pnpm check:codex-compat --binary <path>`
+  decides membership: it generates the App Server schemas from that release's own binary and proves
+  that everything Chelaro sends, validates, or answers is byte-identical, and that the release sends
+  no notification or server request nobody classified. The set is not a range; an unverified release
+  is refused exactly as before, and ADR 0015 records the evidence.
+- Every server notification the App Server can send is now classified once as handled, forbidden, or
+  ignored, and a test proves the three lists cover the generated union exactly. A Codex upgrade that
+  adds a notification fails the suite instead of being dropped in silence.
+- `FINANCE_OS_CODEX_BINARY_PATH` is documented. It points Chelaro at a specific Codex executable, so
+  the assistant can run on its own pinned copy while the global CLI stays current. It accepts a path
+  and never arguments, so the App Server hardening stays in place.
+
 ### Changed
 
 - Chelaro now runs on Codex CLI `0.152.0`. The generated App Server schemas, the compatibility

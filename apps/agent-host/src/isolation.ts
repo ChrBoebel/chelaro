@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { accessSync, constants, realpathSync } from "node:fs";
 
-import { SUPPORTED_CODEX_VERSION } from "./codex-provider.js";
+import { isSupportedCodexVersion } from "./codex-provider.js";
 
 export const SUPPORTED_MACOS_VERSION = "15.6";
 export const SUPPORTED_ARCHITECTURE = "arm64";
@@ -55,13 +55,14 @@ export function assertSupportedCodexBinary(binaryPath: string): CodexBinaryIdent
     encoding: "utf8",
     timeout: 5_000,
   }).trim();
-  if (version !== `codex-cli ${SUPPORTED_CODEX_VERSION}`) {
+  const match = /^codex-cli ([0-9]+\.[0-9]+\.[0-9]+)$/.exec(version);
+  if (!match || !isSupportedCodexVersion(match[1]!)) {
     throw new Error(`Unexpected Codex version: ${version}`);
   }
 
   return {
     path: canonicalPath,
-    version: SUPPORTED_CODEX_VERSION,
+    version: match[1]!,
   };
 }
 

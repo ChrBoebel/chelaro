@@ -5,7 +5,7 @@ import type { ThreadStartResponse } from "../generated/codex/ts/v2/ThreadStartRe
 import type { ThreadResumeResponse } from "../generated/codex/ts/v2/ThreadResumeResponse.js";
 import type { ThreadUnsubscribeResponse } from "../generated/codex/ts/v2/ThreadUnsubscribeResponse.js";
 import type { TurnStartResponse } from "../generated/codex/ts/v2/TurnStartResponse.js";
-import { SUPPORTED_CODEX_VERSION } from "./codex-provider.js";
+import { isSupportedCodexVersion } from "./codex-provider.js";
 import {
   DEFAULT_FINANCE_MODEL_SELECTION,
   FINANCE_SERVICE_TIER_FAST,
@@ -123,7 +123,7 @@ export function assertSafeFinanceThreadResponse(
     response.thread.agentRole !== null ||
     response.thread.gitInfo !== null ||
     response.thread.modelProvider !== "openai" ||
-    response.thread.cliVersion !== SUPPORTED_CODEX_VERSION ||
+    !isSupportedCodexVersion(response.thread.cliVersion) ||
     response.thread.threadSource !== "appServer" ||
     response.thread.status.type !== "idle" ||
     response.thread.turns.length !== 0 ||

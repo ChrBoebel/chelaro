@@ -12,7 +12,7 @@ import {
   type FinanceAgentEvent,
   type FinanceAgentServiceOptions,
 } from "../src/finance-agent-service.js";
-import { providerSnapshot, SUPPORTED_CODEX_VERSION } from "../src/codex-provider.js";
+import { providerSnapshot, SCHEMA_CODEX_VERSION } from "../src/codex-provider.js";
 import { FinanceConsentJournal } from "../src/consent-journal.js";
 import type { FinanceToolApi } from "../src/finance-tool-dispatcher.js";
 import {
@@ -584,7 +584,7 @@ function safeThread(runtimeDirectory: string): Record<string, unknown> {
     thread: {
       agentNickname: null,
       agentRole: null,
-      cliVersion: SUPPORTED_CODEX_VERSION,
+      cliVersion: SCHEMA_CODEX_VERSION,
       createdAt: 1,
       cwd: runtimeDirectory,
       ephemeral: false,

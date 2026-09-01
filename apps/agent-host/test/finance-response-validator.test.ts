@@ -10,7 +10,7 @@ import {
   assertFinanceTurnStartResponse,
   assertSafeFinanceThreadResponse,
 } from "../src/finance-response-validator.js";
-import { SUPPORTED_CODEX_VERSION } from "../src/codex-provider.js";
+import { SCHEMA_CODEX_VERSION } from "../src/codex-provider.js";
 import { DEFAULT_FINANCE_MODEL_SELECTION } from "../src/finance-thread-contract.js";
 
 function safeThread(runtimeDirectory: string): Record<string, unknown> {
@@ -30,7 +30,7 @@ function safeThread(runtimeDirectory: string): Record<string, unknown> {
     thread: {
       agentNickname: null,
       agentRole: null,
-      cliVersion: SUPPORTED_CODEX_VERSION,
+      cliVersion: SCHEMA_CODEX_VERSION,
       createdAt: 1,
       cwd: runtimeDirectory,
       ephemeral: false,

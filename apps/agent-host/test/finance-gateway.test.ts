@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 
-import { providerSnapshot, SUPPORTED_CODEX_VERSION } from "../src/codex-provider.js";
+import { providerSnapshot, SCHEMA_CODEX_VERSION } from "../src/codex-provider.js";
 import { FinanceGateway, type FinanceGatewayService } from "../src/finance-gateway.js";
 import type { FinanceAgentSnapshot } from "../src/finance-agent-service.js";
 import type { FinanceModelSelection } from "../src/finance-thread-contract.js";
@@ -19,7 +19,7 @@ class StubService implements FinanceGatewayService {
       available: [{ efforts: ["low", "medium", "high"], model: "gpt-5.5", supportsFastMode: true }],
       selected: { effort: "medium", fastMode: false, model: "gpt-5.5" },
     },
-    provider: providerSnapshot("ready", SUPPORTED_CODEX_VERSION),
+    provider: providerSnapshot("ready", SCHEMA_CODEX_VERSION),
     session: null,
     turn: null,
     usage: null,

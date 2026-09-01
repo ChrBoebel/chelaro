@@ -24,6 +24,7 @@ import {
   FinanceAssistantStreamProjector,
   type FinanceChatStreamEvent,
 } from "./finance-chat-stream.js";
+import { isForbiddenNotificationMethod } from "./finance-notification-policy.js";
 import {
   assertFinanceModelCatalogPage,
   assertFinanceThreadUsage,
@@ -885,11 +886,7 @@ function isTurnNotification(notification: ServerNotification): boolean {
 }
 
 function isForbiddenNotification(notification: ServerNotification): boolean {
-  // `model/rerouted` means Codex silently ran a different model than the one
-  // the thread echoed back, which invalidates the verified configuration.
-  return /(?:command|process|fileChange|mcp|plan|hook|webSearch|image|collab|subAgent|permissions|patch|diff|approval|guardian|review|environment|externalAgent|thread\/goal|thread\/project|project\/|realtime|fs\/|model\/rerouted|model\/verification)/i.test(
-    notification.method,
-  );
+  return isForbiddenNotificationMethod(notification.method);
 }
 
 function isActiveTurn(turn: FinanceChatState["turn"]): turn is NonNullable<FinanceChatState["turn"]> {

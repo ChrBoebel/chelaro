@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 
-import { SUPPORTED_CODEX_VERSION } from "../src/codex-provider.js";
+import { SCHEMA_CODEX_VERSION } from "../src/codex-provider.js";
 import {
   assertSupportedCodexBinary,
   assertSupportedPlatform,
@@ -17,7 +17,7 @@ const repositoryRoot = resolve(packageRoot, "../..");
 // of pointing at whatever older release is still cached in the pnpm store.
 const nativeCodex = resolve(
   repositoryRoot,
-  `node_modules/.pnpm/@openai+codex@${SUPPORTED_CODEX_VERSION}-darwin-arm64`,
+  `node_modules/.pnpm/@openai+codex@${SCHEMA_CODEX_VERSION}-darwin-arm64`,
   "node_modules/@openai/codex/vendor/aarch64-apple-darwin/bin/codex",
 );
 
@@ -34,7 +34,7 @@ test("isolation: supported platform evidence and Codex version are exact", () =>
     /Unsupported Codex isolation platform/,
   );
   const binary = assertSupportedCodexBinary(nativeCodex);
-  assert.equal(binary.version, SUPPORTED_CODEX_VERSION);
+  assert.equal(binary.version, SCHEMA_CODEX_VERSION);
   assert.equal(binary.path, nativeCodex);
 });
 
