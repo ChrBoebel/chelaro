@@ -11,6 +11,92 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.5.2] - 2026-09-01
+
+### Added
+
+- Chelaro accepts a verified set of Codex releases instead of exactly one, so a Codex patch update
+  no longer stops the assistant the moment it lands. `pnpm check:codex-compat --binary <path>`
+  decides membership: it generates the App Server schemas from that release's own binary and proves
+  that everything Chelaro sends, validates, or answers is byte-identical, and that the release sends
+  no notification or server request nobody classified. The set is not a range; an unverified release
+  is refused exactly as before, and ADR 0015 records the evidence.
+- Every server notification the App Server can send is now classified once as handled, forbidden, or
+  ignored, and a test proves the three lists cover the generated union exactly. A Codex upgrade that
+  adds a notification fails the suite instead of being dropped in silence.
+- `FINANCE_OS_CODEX_BINARY_PATH` is documented. It points Chelaro at a specific Codex executable, so
+  the assistant can run on its own pinned copy while the global CLI stays current. It accepts a path
+  and never arguments, so the App Server hardening stays in place.
+
+## [0.5.1] - 2026-09-01
+
+### Changed
+
+- Chelaro now runs on Codex CLI `0.152.0`. The generated App Server schemas, the compatibility
+  constant, the package pin, and the real App Server tests moved together, as ADR 0011 requires.
+  Every protocol type Chelaro validates is unchanged between `0.151.0` and `0.152.0`; the release
+  adds `modelProvider/authRecovery*` notifications, an `openaiForm` elicitation mode, a
+  `thread/shellCommand` timeout, and two account and project fields, none of which Chelaro reads,
+  sends, or accepts.
+
+### Fixed
+
+- The message for an unsupported Codex installation names the version the running build actually
+  requires instead of a literal in the interface, which would have kept naming `0.151.0` after this
+  upgrade. It now also states that consent and stored conversations survive, and shows the exact
+  install command.
+- A Codex CLI that cannot be started is no longer described with the login text meant for a working
+  installation.
+
+## [0.5.0] - 2026-09-01
+
+### Added
+
+- The finance assistant exposes model, reasoning effort, and Fast Mode. The choice is bound to the
+  conversation, stored with its provider thread, and reused when the conversation is resumed.
+- The chat header names the model, effort, and Fast Mode the open conversation actually runs on, and
+  offers **Konfiguration ändern** to rebind it.
+- The assistant shows token usage and how full the model context window is, and says when Codex has
+  condensed the history. Fast Mode raises usage, which was previously invisible.
+- Answers can be copied, a failed or interrupted question can be resent, and the example questions
+  are now buttons that fill the input field.
+
+### Fixed
+
+- Reopening a conversation works. It previously failed in three separate ways: with a conflict
+  until Chelaro was restarted, and — underneath that — because Chelaro checked the resumed thread
+  against the shape of a started one. A real `thread/resume` carries three additional fields and
+  reports the workspace it was started in, so every resume against real Codex was rejected as an
+  unsafe configuration. All three are fixed and covered by tests that use the real resume shape.
+- A rejected assistant action now names its reason — missing Codex login, an unavailable model, a
+  running turn — instead of always suggesting a retry that could not succeed.
+- An existing local database created before the explicit model selection is migrated instead of
+  failing on the missing columns. The desktop schema moves to version 5.
+
+### Changed
+
+- Chelaro now sends the model, reasoning effort, and service tier explicitly on every thread start
+  and resume instead of inheriting them from the owner's personal `~/.codex/config.toml`. Assistant
+  conversations previously ran on whatever that file declared.
+- The assistant offers GPT-5.6-Luna, GPT-5.5, GPT-5.4, and GPT-5.4-Mini, newest first, and new
+  conversations start on the newest one at medium effort with Fast Mode off. Fast Mode maps to the
+  Codex `priority` tier, which Codex describes as 1.5x speed at increased usage.
+
+### Security
+
+- A thread is accepted only when Codex echoes back exactly the requested model, effort, and service
+  tier. The App Server accepts unknown values without an error and silently substitutes them, so the
+  request alone is not evidence of the running configuration.
+- GPT-5.6-Sol and GPT-5.6-Terra are not offered: they declare a `collaboration` namespace with
+  `spawn_agent` and related tools at the provider edge that the pinned App Server cannot disable,
+  which ADR 0010 forbids. GPT-5.6-Luna reaches the provider with the isolated Code Mode router
+  only, whose own tool set is exactly the eight finance functions, so it is offered. The
+  provider-edge manifest test runs once per offered model and verifies both routing paths.
+- `model/rerouted` and `model/verification` notifications now abort the turn.
+- The host identifier ledger now records the role each identifier was seen in. A resumed provider
+  thread may reattach; the same identifier appearing as a session or turn identifier is still
+  refused.
+
 ## [0.4.1] - 2026-08-31
 
 ### Fixed

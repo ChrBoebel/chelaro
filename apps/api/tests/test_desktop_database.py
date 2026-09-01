@@ -52,7 +52,7 @@ async def test_desktop_database_bootstraps_once_and_stores_money_as_integer_cent
     assert stored == (12_345_678_912, "integer")
     assert loaded is not None
     assert loaded.amount == Decimal("123456789.12")
-    assert version == 4
+    assert version == 5
     await database.dispose()
 
 
@@ -225,7 +225,7 @@ async def test_desktop_database_migrates_v1_proposals_without_data_loss(
             await connection.execute(text("PRAGMA foreign_key_check"))
         ).all()
 
-    assert versions == [1, 2, 3, 4]
+    assert versions == [1, 2, 3, 4, 5]
     assert proposal == (
         "receivable_update",
         1,
@@ -287,7 +287,7 @@ async def test_desktop_database_migrates_v3_to_durable_assistant_history(
             ).all()
         }
 
-    assert version == 4
+    assert version == 5
     assert {
         "assistant_activities",
         "assistant_conversation_events",
@@ -296,6 +296,81 @@ async def test_desktop_database_migrates_v3_to_durable_assistant_history(
         "assistant_provider_runtime",
         "assistant_turns",
     } <= tables
+    await database.dispose()
+
+
+@pytest.mark.asyncio
+async def test_desktop_database_backfills_the_explicit_model_binding(tmp_path: Path) -> None:
+    """An installation from before ADR 0014 keeps its threads and gains a configuration."""
+
+    database = Database(f"sqlite+aiosqlite:///{tmp_path / 'finance-os-v4.sqlite3'}")
+
+    async with database.engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+        await connection.execute(text("DROP TABLE assistant_provider_runtime"))
+        await connection.execute(
+            text(
+                "CREATE TABLE assistant_provider_runtime ("
+                "conversation_id INTEGER NOT NULL, "
+                "provider_name TEXT DEFAULT 'codex' NOT NULL, "
+                "provider_thread_id VARCHAR(128) NOT NULL, "
+                "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL, "
+                "PRIMARY KEY (conversation_id), "
+                "CONSTRAINT ck_assistant_runtime_provider CHECK (provider_name IN ('codex')), "
+                "FOREIGN KEY(conversation_id) REFERENCES assistant_conversations (id) "
+                "ON DELETE RESTRICT, UNIQUE (provider_thread_id))"
+            )
+        )
+        await connection.execute(
+            text(
+                "INSERT INTO assistant_conversations "
+                "(id, public_id, title, status, message_count, version, "
+                "created_at, updated_at) VALUES "
+                "(1, '11111111111111111111111111111111', 'Alte Unterhaltung', 'active', "
+                "0, 1, '2026-08-31T10:00:00+00:00', '2026-08-31T10:00:00+00:00')"
+            )
+        )
+        await connection.execute(
+            text(
+                "INSERT INTO assistant_provider_runtime "
+                "(conversation_id, provider_name, provider_thread_id, updated_at) "
+                "VALUES (1, 'codex', 'provider_thread_legacy', '2026-08-31T10:00:00+00:00')"
+            )
+        )
+        await connection.execute(
+            text(
+                "CREATE TABLE desktop_schema_migrations ("
+                "version INTEGER PRIMARY KEY NOT NULL, applied_at TEXT NOT NULL)"
+            )
+        )
+        await connection.execute(
+            text(
+                "INSERT INTO desktop_schema_migrations (version, applied_at) "
+                "VALUES (4, '2026-08-31T10:00:00+00:00')"
+            )
+        )
+
+    await database.prepare_schema()
+
+    async with database.engine.connect() as connection:
+        version = (
+            await connection.execute(text("SELECT MAX(version) FROM desktop_schema_migrations"))
+        ).scalar_one()
+        binding = (
+            await connection.execute(
+                text(
+                    "SELECT conversation_id, provider_thread_id, provider_model, "
+                    "provider_effort, provider_service_tier "
+                    "FROM assistant_provider_runtime"
+                )
+            )
+        ).all()
+        violations = (await connection.execute(text("PRAGMA foreign_key_check"))).all()
+
+    assert version == 5
+    # The thread survives untouched; only the configuration is new.
+    assert binding == [(1, "provider_thread_legacy", "gpt-5.6-luna", "medium", "default")]
+    assert violations == []
     await database.dispose()
 
 

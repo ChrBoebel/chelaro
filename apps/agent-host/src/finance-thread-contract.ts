@@ -47,6 +47,83 @@ export const FINANCE_DISABLED_CODEX_FEATURES = [
 
 export const FINANCE_ENABLED_CODEX_FEATURES = ["code_mode_host"] as const;
 
+/**
+ * Models the finance assistant may run on, newest first. The live `model/list`
+ * catalog is intersected with this list, so a model Codex starts shipping never
+ * reaches the assistant before its provider-edge tool manifest was verified,
+ * and the picker offers the newest verified model rather than whatever order
+ * Codex happens to return.
+ *
+ * Every model here reaches the provider with exactly the eight finance
+ * functions (ADR 0010) — `gpt-5.6-luna` through the isolated Code Mode router
+ * ADR 0012 sanctions, the others as direct function calls.
+ *
+ * `gpt-5.6-sol` and `gpt-5.6-terra` are deliberately absent. Beyond that router
+ * they declare a `collaboration` namespace with `spawn_agent`, `send_message`,
+ * `followup_task`, `interrupt_agent`, `list_agents`, and `wait_agent`, which
+ * the pinned App Server does not let us switch off — `features.collaboration =
+ * false` is rejected under `--strict-config`, and `features.code_mode_host =
+ * false` changes nothing. `multiAgentMode` only shapes instructions, not the
+ * tool surface, and instructions are not a boundary.
+ *
+ * See `finance-provider-manifest.test.ts`, which enforces this per model.
+ */
+export const FINANCE_SUPPORTED_MODELS = [
+  "gpt-5.6-luna",
+  "gpt-5.5",
+  "gpt-5.4",
+  "gpt-5.4-mini",
+] as const;
+
+/**
+ * Models whose tool calls reach the provider through the Code Mode `exec`
+ * router instead of as direct function calls. The router's `tools` object
+ * carries exactly the eight finance functions and has no Node, shell, file,
+ * or network access; `wait` is its continuation call, not a capability.
+ */
+export const FINANCE_CODE_MODE_MODELS = ["gpt-5.6-luna"] as const;
+
+export const FINANCE_SUPPORTED_EFFORTS = ["low", "medium", "high"] as const;
+
+/** Standard speed. Codex reports this tier back verbatim. */
+export const FINANCE_SERVICE_TIER_STANDARD = "default";
+/** "Fast" in the Codex catalog: 1.5x speed at increased usage. */
+export const FINANCE_SERVICE_TIER_FAST = "priority";
+
+export type FinanceModelId = (typeof FINANCE_SUPPORTED_MODELS)[number];
+export type FinanceEffort = (typeof FINANCE_SUPPORTED_EFFORTS)[number];
+
+export interface FinanceModelSelection {
+  effort: FinanceEffort;
+  fastMode: boolean;
+  model: FinanceModelId;
+}
+
+/** The newest verified model, so a new conversation starts on the best one. */
+export const DEFAULT_FINANCE_MODEL_SELECTION: FinanceModelSelection = Object.freeze({
+  effort: "medium",
+  fastMode: false,
+  model: FINANCE_SUPPORTED_MODELS[0],
+});
+
+export function financeServiceTier(fastMode: boolean): string {
+  return fastMode ? FINANCE_SERVICE_TIER_FAST : FINANCE_SERVICE_TIER_STANDARD;
+}
+
+export function assertFinanceModelSelection(
+  value: unknown,
+): asserts value is FinanceModelSelection {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ["effort", "fastMode", "model"]) ||
+    typeof value.fastMode !== "boolean" ||
+    !FINANCE_SUPPORTED_MODELS.includes(value.model as FinanceModelId) ||
+    !FINANCE_SUPPORTED_EFFORTS.includes(value.effort as FinanceEffort)
+  ) {
+    throw new FinanceThreadContractError("invalid_model_selection");
+  }
+}
+
 type StableFinanceThreadFields = Pick<
   ThreadStartParams,
   | "approvalPolicy"
@@ -60,6 +137,7 @@ type StableFinanceThreadFields = Pick<
   | "personality"
   | "sandbox"
   | "serviceName"
+  | "serviceTier"
   | "sessionStartSource"
   | "threadSource"
 >;
@@ -81,6 +159,7 @@ export type FinanceThreadResumeParams = Pick<
   | "model"
   | "personality"
   | "sandbox"
+  | "serviceTier"
   | "threadId"
 >;
 
@@ -124,18 +203,15 @@ export function buildFinanceInitializeParams(version: string): InitializeParams 
 }
 
 export function buildFinanceThreadStartParams(
-  model?: string,
+  selection: FinanceModelSelection = DEFAULT_FINANCE_MODEL_SELECTION,
   disabledMcpServerNames: readonly string[] = [],
 ): FinanceThreadStartParams {
-  if (model !== undefined && !/^[A-Za-z0-9._-]{1,128}$/.test(model)) {
-    throw new FinanceThreadContractError("invalid_model");
-  }
+  assertFinanceModelSelection(selection);
   const features: Record<string, JsonValue> = Object.fromEntries(
     FINANCE_DISABLED_CODEX_FEATURES.map((name) => [name, false]),
   );
   for (const name of FINANCE_ENABLED_CODEX_FEATURES) features[name] = true;
   const params: FinanceThreadStartParams = {
-    ...(model === undefined ? {} : { model }),
     approvalPolicy: "never",
     approvalsReviewer: "user",
     baseInstructions,
@@ -144,6 +220,9 @@ export function buildFinanceThreadStartParams(
       mcp_servers: Object.fromEntries(
         validatedMcpServerNames(disabledMcpServerNames).map((name) => [name, { enabled: false }]),
       ),
+      // Codex resolves the effort from CODEX_HOME when this key is absent, so
+      // omitting it would inherit the owner's personal Codex configuration.
+      model_reasoning_effort: selection.effort,
       orchestrator: {
         mcp: { enabled: false },
         skills: { enabled: false },
@@ -163,9 +242,11 @@ export function buildFinanceThreadStartParams(
     dynamicTools: FINANCE_DYNAMIC_TOOLS,
     environments: [],
     ephemeral: false,
+    model: selection.model,
     personality: "pragmatic",
     sandbox: "read-only",
     serviceName: FINANCE_ASSISTANT_SERVICE_NAME,
+    serviceTier: financeServiceTier(selection.fastMode),
     sessionStartSource: "startup",
     threadSource: "appServer",
   };
@@ -185,10 +266,11 @@ export function assertFinanceThreadStartParams(value: unknown): asserts value is
     "dynamicTools",
     "environments",
     "ephemeral",
-    ...(value.model === undefined ? [] : ["model"]),
+    "model",
     "personality",
     "sandbox",
     "serviceName",
+    "serviceTier",
     "sessionStartSource",
     "threadSource",
   ].sort();
@@ -205,6 +287,10 @@ export function assertFinanceThreadStartParams(value: unknown): asserts value is
     value.serviceName !== FINANCE_ASSISTANT_SERVICE_NAME ||
     value.sessionStartSource !== "startup" ||
     value.threadSource !== "appServer" ||
+    !FINANCE_SUPPORTED_MODELS.includes(value.model as FinanceModelId) ||
+    ![FINANCE_SERVICE_TIER_STANDARD, FINANCE_SERVICE_TIER_FAST].includes(
+      value.serviceTier as string,
+    ) ||
     !Array.isArray(value.environments) ||
     value.environments.length !== 0 ||
     value.dynamicTools !== FINANCE_DYNAMIC_TOOLS ||
@@ -212,8 +298,17 @@ export function assertFinanceThreadStartParams(value: unknown): asserts value is
     typeof value.baseInstructions !== "string" ||
     typeof value.developerInstructions !== "string" ||
     !isRecord(value.config) ||
-    !hasExactKeys(value.config, ["features", "mcp_servers", "orchestrator", "skills", "tools", "web_search"]) ||
+    !hasExactKeys(value.config, [
+      "features",
+      "mcp_servers",
+      "model_reasoning_effort",
+      "orchestrator",
+      "skills",
+      "tools",
+      "web_search",
+    ]) ||
     value.config.web_search !== "disabled" ||
+    !FINANCE_SUPPORTED_EFFORTS.includes(value.config.model_reasoning_effort as FinanceEffort) ||
     !isDisabledMcpServers(value.config.mcp_servers) ||
     !isDisabledEntries(value.config.orchestrator, ["mcp", "skills"]) ||
     !isRecord(value.config.skills) ||
@@ -238,15 +333,14 @@ export function assertFinanceThreadStartParams(value: unknown): asserts value is
 
 export function buildFinanceThreadResumeParams(
   threadId: string,
-  model?: string,
+  selection: FinanceModelSelection = DEFAULT_FINANCE_MODEL_SELECTION,
   disabledMcpServerNames: readonly string[] = [],
 ): FinanceThreadResumeParams {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(threadId)) {
     throw new FinanceThreadContractError("invalid_contract");
   }
-  const started = buildFinanceThreadStartParams(model, disabledMcpServerNames);
+  const started = buildFinanceThreadStartParams(selection, disabledMcpServerNames);
   return {
-    ...(started.model === undefined ? {} : { model: started.model }),
     approvalPolicy: started.approvalPolicy!,
     approvalsReviewer: started.approvalsReviewer!,
     baseInstructions: started.baseInstructions!,
@@ -254,8 +348,10 @@ export function buildFinanceThreadResumeParams(
     cwd: started.cwd!,
     developerInstructions: started.developerInstructions!,
     excludeTurns: true,
+    model: started.model!,
     personality: started.personality!,
     sandbox: started.sandbox!,
+    serviceTier: started.serviceTier!,
     threadId,
   };
 }
@@ -271,7 +367,11 @@ export function configuredMcpServerNames(value: unknown): string[] {
 }
 
 export class FinanceThreadContractError extends Error {
-  readonly code: "invalid_contract" | "invalid_model" | "invalid_version";
+  readonly code:
+    | "invalid_contract"
+    | "invalid_model"
+    | "invalid_model_selection"
+    | "invalid_version";
 
   constructor(code: FinanceThreadContractError["code"]) {
     super("Codex finance thread contract validation failed.");

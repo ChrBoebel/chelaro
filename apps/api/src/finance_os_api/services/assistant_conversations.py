@@ -181,10 +181,7 @@ class AssistantConversationService:
     ) -> AssistantProviderRuntimeResource:
         conversation = await find_conversation(session, conversation_id)
         runtime = await session.get(AssistantProviderRuntime, conversation.id)
-        return AssistantProviderRuntimeResource(
-            conversation_id=conversation.public_id,
-            provider_thread_id=runtime.provider_thread_id if runtime else None,
-        )
+        return _runtime_resource(conversation.public_id, runtime)
 
     async def bind_runtime(
         self,
@@ -192,6 +189,9 @@ class AssistantConversationService:
         *,
         conversation_id: UUID,
         provider_thread_id: str,
+        provider_model: str,
+        provider_effort: str,
+        provider_service_tier: str,
         actor: Actor,
     ) -> AssistantProviderRuntimeResource:
         conversation = await lock_conversation(session, conversation_id)
@@ -207,21 +207,30 @@ class AssistantConversationService:
             runtime = AssistantProviderRuntime(
                 conversation_id=conversation.id,
                 provider_thread_id=provider_thread_id,
+                provider_model=provider_model,
+                provider_effort=provider_effort,
+                provider_service_tier=provider_service_tier,
             )
             session.add(runtime)
         elif runtime.provider_thread_id != provider_thread_id:
             raise provider_binding_conflict()
         else:
-            return AssistantProviderRuntimeResource(
-                conversation_id=conversation.public_id,
-                provider_thread_id=runtime.provider_thread_id,
-            )
+            # A resume may re-bind the same thread to a different verified
+            # configuration; the audit records the change.
+            runtime.provider_model = provider_model
+            runtime.provider_effort = provider_effort
+            runtime.provider_service_tier = provider_service_tier
         add_event(
             session,
             conversation,
             "provider_bound",
             actor,
-            details={"provider": "codex"},
+            details={
+                "provider": "codex",
+                "model": provider_model,
+                "effort": provider_effort,
+                "service_tier": provider_service_tier,
+            },
         )
         try:
             await session.commit()
@@ -231,6 +240,9 @@ class AssistantConversationService:
         return AssistantProviderRuntimeResource(
             conversation_id=conversation.public_id,
             provider_thread_id=provider_thread_id,
+            provider_model=provider_model,
+            provider_effort=provider_effort,  # type: ignore[arg-type]
+            provider_service_tier=provider_service_tier,  # type: ignore[arg-type]
         )
 
     async def reserve_turn(
@@ -587,4 +599,19 @@ def provider_binding_conflict() -> ApiError:
         status_code=409,
         code="provider_thread_conflict",
         message="The provider thread is already bound to a conversation.",
+    )
+
+
+def _runtime_resource(
+    conversation_public_id: UUID,
+    runtime: AssistantProviderRuntime | None,
+) -> AssistantProviderRuntimeResource:
+    return AssistantProviderRuntimeResource(
+        conversation_id=conversation_public_id,
+        provider_thread_id=runtime.provider_thread_id if runtime else None,
+        provider_model=runtime.provider_model if runtime else None,
+        provider_effort=runtime.provider_effort if runtime else None,  # type: ignore[arg-type]
+        provider_service_tier=(
+            runtime.provider_service_tier if runtime else None  # type: ignore[arg-type]
+        ),
     )

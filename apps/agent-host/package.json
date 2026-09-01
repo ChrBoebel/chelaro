@@ -11,13 +11,14 @@
     "test:isolation": "pnpm build && node --test --test-name-pattern=isolation dist/test/isolation.test.js",
     "generate:codex-schema": "node scripts/generate-codex-schema.mjs",
     "check:codex-schema": "node scripts/generate-codex-schema.mjs --check",
+    "check:codex-compat": "node scripts/check-codex-compat.mjs",
     "check:codex-experimental-contract": "node scripts/check-experimental-contract.mjs"
   },
   "dependencies": {
     "ajv": "8.18.0"
   },
   "devDependencies": {
-    "@openai/codex": "0.151.0",
+    "@openai/codex": "0.152.0",
     "@types/node": "^20",
     "typescript": "^5"
   }

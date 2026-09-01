@@ -72,10 +72,18 @@ class AssistantMessageListResponse(BaseModel):
     next_before_sequence: int | None
 
 
+PROVIDER_MODEL_PATTERN = r"^[A-Za-z0-9._-]{1,128}$"
+ProviderEffort = Literal["low", "medium", "high"]
+ProviderServiceTier = Literal["default", "priority"]
+
+
 class AssistantProviderRuntimeUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     provider_thread_id: str = Field(pattern=PUBLIC_ID_PATTERN)
+    provider_model: str = Field(pattern=PROVIDER_MODEL_PATTERN)
+    provider_effort: ProviderEffort
+    provider_service_tier: ProviderServiceTier
 
 
 class AssistantProviderRuntimeResource(BaseModel):
@@ -83,6 +91,9 @@ class AssistantProviderRuntimeResource(BaseModel):
 
     conversation_id: UUID
     provider_thread_id: str | None
+    provider_model: str | None
+    provider_effort: ProviderEffort | None
+    provider_service_tier: ProviderServiceTier | None
 
 
 class AssistantProviderRuntimeResponse(BaseModel):

@@ -31,7 +31,7 @@ reported rather than inventing a coverage percentage.
 
 ## Real provider smoke
 
-The locally installed `codex-cli 0.151.0` was resolved as a direct executable and started with
+The locally installed `codex-cli 0.152.0` was resolved as a direct executable and started with
 `codex app-server --stdio`. The initialize response matched Chelaro's client identity and the
 configured Codex home. A bounded `account/read` with `refreshToken: false` detected an existing
 ChatGPT account. The diagnostic emitted only booleans and provider state; it did not print account

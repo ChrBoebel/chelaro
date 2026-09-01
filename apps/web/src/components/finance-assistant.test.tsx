@@ -8,9 +8,18 @@ const baseSnapshot = {
   auth: "logged_out",
   consent: { status: "unknown", version: null },
   host: "ready",
-  provider: { status: "ready", version: "0.151.0" },
+  models: {
+    available: [
+      { efforts: ["low", "medium", "high"], model: "gpt-5.6-luna", supportsFastMode: true },
+      { efforts: ["low", "medium", "high"], model: "gpt-5.5", supportsFastMode: true },
+      { efforts: ["low", "medium", "high"], model: "gpt-5.4-mini", supportsFastMode: false },
+    ],
+    selected: { effort: "medium", fastMode: false, model: "gpt-5.6-luna" },
+  },
+  provider: { status: "ready", supportedVersions: ["0.152.0"], version: "0.152.0" },
   session: null,
   turn: null,
+  usage: null,
 };
 
 class TestEventSource {
@@ -101,12 +110,26 @@ describe("FinanceAssistant", () => {
       ...baseSnapshot,
       appServer: "stopped",
       consent: { status: "granted", version: "2026-08-31.v2" },
-      provider: { status: "not_found", version: null },
+      provider: { status: "not_found", supportedVersions: ["0.152.0"], version: null },
     };
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ snapshot: unavailable })));
     render(<FinanceAssistant />);
     expect(await screen.findByRole("heading", { name: "Codex wurde nicht gefunden" })).toBeDefined();
     expect(screen.getByText(/übrigen Finanzfunktionen bleiben nutzbar/)).toBeDefined();
+  });
+
+  it("names the supported Codex version the host reports instead of a literal", async () => {
+    const unsupported = {
+      ...baseSnapshot,
+      appServer: "stopped",
+      consent: { status: "granted", version: "2026-08-31.v2" },
+      provider: { status: "unsupported", supportedVersions: ["9.9.9"], version: "0.1.0" },
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ snapshot: unsupported })));
+    render(<FinanceAssistant />);
+    expect(await screen.findByRole("heading", { name: "Codex-Version wird nicht unterstützt" })).toBeDefined();
+    expect(screen.getByText(/Installiert ist 0\.1\.0; Chelaro benötigt die geprüfte Codex CLI 9\.9\.9\./)).toBeDefined();
+    expect(screen.getByText("npm install -g @openai/codex@9.9.9")).toBeDefined();
   });
 
   it("streams bound plain-text finance answers and keeps mutations review-only", async () => {
@@ -255,6 +278,91 @@ describe("FinanceAssistant", () => {
     expect(await screen.findByText("Lokal gespeicherte Antwort")).toBeDefined();
   });
 
+  it("offers the suggestions as controls and shows the bound configuration while chatting", async () => {
+    const authenticated = {
+      ...baseSnapshot,
+      auth: "authenticated",
+      consent: { status: "granted", version: "2026-08-31.v2" },
+      models: {
+        ...baseSnapshot.models,
+        selected: { effort: "high", fastMode: true, model: "gpt-5.5" },
+      },
+      session: { conversationId: null, id: "session_test_2", status: "ready" },
+      usage: { compactions: 2, contextWindow: 200_000, totalTokens: 40_000, usedTokens: 50_000 },
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ snapshot: authenticated })));
+
+    render(<FinanceAssistant />);
+
+    // The configuration is bound for the whole conversation, so it stays
+    // readable after the picker is gone.
+    expect(await screen.findByText("gpt-5.5")).toBeDefined();
+    expect(screen.getByText(/Fast Mode/)).toBeDefined();
+    expect(screen.getByText(/Kontext 25 %/)).toBeDefined();
+    expect(screen.getByText(/2× verdichtet/)).toBeDefined();
+
+    const suggestion = screen.getByRole("button", { name: "Wie war mein Monat?" });
+    fireEvent.click(suggestion);
+    const prompt = screen.getByLabelText("Frage an den Finanzassistenten");
+    expect((prompt as HTMLTextAreaElement).value).toBe("Wie war mein Monat?");
+  });
+
+  it("offers the newest verified model first and preselects it", async () => {
+    const authenticated = {
+      ...baseSnapshot,
+      auth: "authenticated",
+      consent: { status: "granted", version: "2026-08-31.v2" },
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ snapshot: authenticated })));
+
+    render(<FinanceAssistant />);
+
+    const picker = await screen.findByLabelText("Modell");
+    // The host orders the catalog newest first; an owner starting a
+    // conversation must not land on an older model by accident.
+    expect([...(picker as HTMLSelectElement).options].map((option) => option.value)).toEqual([
+      "gpt-5.6-luna",
+      "gpt-5.5",
+      "gpt-5.4-mini",
+    ]);
+    expect((picker as HTMLSelectElement).value).toBe("gpt-5.6-luna");
+  });
+
+  it("names the reason a rejected action failed instead of suggesting a retry", async () => {
+    const authenticated = {
+      ...baseSnapshot,
+      auth: "authenticated",
+      consent: { status: "granted", version: "2026-08-31.v2" },
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/assistant/conversations")) {
+        return init?.method === "POST"
+          ? jsonResponse({
+              data: {
+                id: "123e4567-e89b-42d3-a456-426614174002",
+                message_count: 0,
+                status: "active",
+                title: "Neue Unterhaltung",
+                updated_at: "2026-09-01T12:00:00Z",
+                version: 1,
+              },
+            }, 201)
+          : jsonResponse({ data: [] });
+      }
+      if (url.endsWith("/api/assistant/sessions")) {
+        return jsonResponse({ error: { code: "model_not_available" } }, 409);
+      }
+      return jsonResponse({ snapshot: authenticated });
+    }));
+
+    render(<FinanceAssistant />);
+    const [startButton] = await screen.findAllByRole("button", { name: "Neue Unterhaltung" });
+    fireEvent.click(startButton);
+
+    expect(await screen.findByText(/Das gewählte Modell bietet Codex gerade nicht an/)).toBeDefined();
+  });
+
   it("continues a selected local conversation with its exact conversation id", async () => {
     const conversationId = "123e4567-e89b-42d3-a456-426614174000";
     const authenticated = {
@@ -301,6 +409,17 @@ describe("FinanceAssistant", () => {
         method: "POST",
       }),
     ));
+
+    const sessionCall = (
+      fetchMock.mock.calls as unknown as Array<[string, RequestInit | undefined]>
+    ).find(([url]) => typeof url === "string" && url.endsWith("/api/assistant/sessions"));
+    // The renderer must name the configuration explicitly; an absent selection
+    // would let the host fall back instead of binding a verified one.
+    expect(JSON.parse(String(sessionCall?.[1]?.body)).model_selection).toEqual({
+      effort: "medium",
+      fast_mode: false,
+      model: "gpt-5.6-luna",
+    });
   });
 });
 

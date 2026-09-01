@@ -58,6 +58,9 @@ test("persists the exact conversation binding, prompt, and completed assistant t
         response.end(JSON.stringify({
           data: {
             conversation_id: conversationId,
+            provider_effort: "medium",
+            provider_model: "gpt-5.5",
+            provider_service_tier: "default",
             provider_thread_id: request.method === "GET" ? null : "provider_thread_1",
           },
         }));
@@ -72,7 +75,11 @@ test("persists the exact conversation binding, prompt, and completed assistant t
   client.setCredential(token);
 
   assert.equal(await client.getConversationRuntime(conversationId), null);
-  await client.bindConversationRuntime(conversationId, "provider_thread_1");
+  await client.bindConversationRuntime(conversationId, "provider_thread_1", {
+    effort: "medium",
+    fastMode: false,
+    model: "gpt-5.5",
+  });
   await client.reserveConversationTurn(conversationId, "turn_1", "Synthetische Frage");
   await client.completeConversationTurn(
     conversationId,

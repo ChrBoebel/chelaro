@@ -2,12 +2,42 @@ import { execFileSync } from "node:child_process";
 import { accessSync, constants, realpathSync, statSync } from "node:fs";
 import { isAbsolute, delimiter, join } from "node:path";
 
-export const SUPPORTED_CODEX_VERSION = "0.151.0";
+/**
+ * The Codex CLI release the checked-in App Server schemas under
+ * `generated/codex` were produced from. Every response Chelaro validates and
+ * every request it sends is shaped against this one release.
+ */
+export const SCHEMA_CODEX_VERSION = "0.152.0";
+
+/**
+ * Every Codex CLI release the finance host accepts, newest first. The runtime
+ * carries the list so the user-facing message names the versions the running
+ * build actually verified instead of repeating a literal that drifts on the
+ * next upgrade.
+ *
+ * A release only enters this list once `pnpm check:codex-compat --binary <path>`
+ * has proven, against that release's own binary, that everything Chelaro
+ * sends, validates, or answers is byte-identical to `SCHEMA_CODEX_VERSION`,
+ * and that the release sends no server notification or request Chelaro has not
+ * reviewed. The provider-edge manifest test (ADR 0010) must pass against the
+ * same binary. This is a set of verified releases, not a tolerated range:
+ * anything unlisted is still refused, and the exact-key response contracts
+ * fail closed underneath regardless.
+ */
+export const SUPPORTED_CODEX_VERSIONS: readonly string[] = Object.freeze([
+  "0.152.0",
+  "0.151.0",
+]);
+
+export function isSupportedCodexVersion(version: string): boolean {
+  return SUPPORTED_CODEX_VERSIONS.includes(version);
+}
 
 export type CodexProviderStatus = "checking" | "ready" | "not_found" | "unsupported" | "error";
 
 export interface CodexProviderSnapshot {
   status: CodexProviderStatus;
+  supportedVersions: readonly string[];
   version: string | null;
 }
 
@@ -37,7 +67,7 @@ export function inspectCodexProvider(options: CodexProviderOptions): CodexProvid
   const searchPath = validSearchPath(options.path ?? "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin");
   const binaryName = validBinaryName(options.binaryPath ?? "codex");
   const binaryPath = resolveExecutable(binaryName, searchPath);
-  if (!binaryPath) return { launch: null, snapshot: { status: "not_found", version: null } };
+  if (!binaryPath) return { launch: null, snapshot: providerSnapshot("not_found", null) };
 
   let rawVersion: string;
   try {
@@ -52,18 +82,25 @@ export function inspectCodexProvider(options: CodexProviderOptions): CodexProvid
       timeout: 5_000,
     }).trim();
   } catch {
-    return { launch: null, snapshot: { status: "error", version: null } };
+    return { launch: null, snapshot: providerSnapshot("error", null) };
   }
   const match = /^codex-cli ([0-9]+\.[0-9]+\.[0-9]+)$/.exec(rawVersion);
-  if (!match) return { launch: null, snapshot: { status: "error", version: null } };
+  if (!match) return { launch: null, snapshot: providerSnapshot("error", null) };
   const version = match[1]!;
-  if (version !== SUPPORTED_CODEX_VERSION) {
-    return { launch: null, snapshot: { status: "unsupported", version } };
+  if (!isSupportedCodexVersion(version)) {
+    return { launch: null, snapshot: providerSnapshot("unsupported", version) };
   }
   return {
     launch: { binaryPath, codexHome, home, path: searchPath, version },
-    snapshot: { status: "ready", version },
+    snapshot: providerSnapshot("ready", version),
   };
+}
+
+export function providerSnapshot(
+  status: CodexProviderStatus,
+  version: string | null,
+): CodexProviderSnapshot {
+  return { status, supportedVersions: SUPPORTED_CODEX_VERSIONS, version };
 }
 
 function resolveExecutable(binaryPath: string, searchPath: string): string | null {

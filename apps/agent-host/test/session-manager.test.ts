@@ -30,7 +30,7 @@ function runningTurn(): FinanceChatState {
   return apply(
     prerequisites(),
     { type: "session.start", consentVersion: CONSENT_VERSION, sessionId: "session_1" },
-    { type: "session.ready", providerThreadId: "codex_thread_1", sessionId: "session_1" },
+    { type: "session.ready", providerThreadId: "codex_thread_1", resumed: false, sessionId: "session_1" },
     { type: "turn.start", sessionId: "session_1", turnId: "turn_1" },
     { type: "turn.running", providerTurnId: "codex_turn_1", turnId: "turn_1" },
   );
@@ -171,6 +171,49 @@ test("finance chat lifecycle: rejects resource mismatches and identifier reuse",
       type: "session.start",
       consentVersion: CONSENT_VERSION,
       sessionId: "session_1",
+    }),
+    (error: unknown) => error instanceof SessionTransitionError && error.code === "identifier_reused",
+  );
+});
+
+test("finance chat lifecycle: reattaches a resumed provider thread but not a foreign role", () => {
+  const closed = apply(
+    runningTurn(),
+    { type: "turn.finish", status: "completed", turnId: "turn_1" },
+    { type: "session.close", sessionId: "session_1" },
+  );
+  const reopened = apply(
+    closed,
+    { type: "session.start", consentVersion: CONSENT_VERSION, sessionId: "session_2" },
+    {
+      type: "session.ready",
+      providerThreadId: "codex_thread_1",
+      resumed: true,
+      sessionId: "session_2",
+    },
+  );
+  assert.equal(reopened.session?.providerThreadId, "codex_thread_1");
+  // The ledger records each identifier once, so reopening a conversation does
+  // not consume budget that a long session needs for its turns.
+  assert.equal(
+    reopened.issuedResourceIds.filter(({ id }) => id === "codex_thread_1").length,
+    1,
+  );
+
+  // The same identifier arriving in any other role is still a collision.
+  assert.throws(
+    () => reduceFinanceChatState(reopened, {
+      type: "turn.start",
+      sessionId: "session_2",
+      turnId: "codex_thread_1",
+    }),
+    (error: unknown) => error instanceof SessionTransitionError && error.code === "identifier_reused",
+  );
+  assert.throws(
+    () => reduceFinanceChatState(closed, {
+      type: "session.start",
+      consentVersion: CONSENT_VERSION,
+      sessionId: "codex_thread_1",
     }),
     (error: unknown) => error instanceof SessionTransitionError && error.code === "identifier_reused",
   );

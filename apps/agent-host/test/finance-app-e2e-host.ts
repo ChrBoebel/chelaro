@@ -1,5 +1,6 @@
 import type { ServerNotification } from "../generated/codex/ts/ServerNotification.js";
 import type { ServerRequest } from "../generated/codex/ts/ServerRequest.js";
+import { SCHEMA_CODEX_VERSION } from "../src/codex-provider.js";
 import { FinanceAgentService, type FinanceAgentServiceOptions } from "../src/finance-agent-service.js";
 import { FinanceApiClient } from "../src/finance-api-client.js";
 import { FinanceConsentJournal } from "../src/consent-journal.js";
@@ -31,7 +32,7 @@ class SyntheticFinanceProcess {
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
 
-  async request(method: string): Promise<unknown> {
+  async request(method: string, params?: unknown): Promise<unknown> {
     switch (method) {
       case "account/read":
         return {
@@ -40,8 +41,22 @@ class SyntheticFinanceProcess {
         };
       case "config/read":
         return { config: { mcp_servers: {} }, layers: null, origins: {} };
+      case "model/list":
+        return { data: FINANCE_E2E_MODELS.map(catalogModel), nextCursor: null };
       case "thread/start":
-        return safeThread(this.#runtimeDirectory);
+        // ADR 0014 only accepts a thread that echoes the requested model,
+        // effort, and service tier, so the synthetic App Server has to answer
+        // the way the real one does.
+        return echoedThread(this.#runtimeDirectory, params);
+      case "thread/resume":
+        // A resumed thread carries three more fields than a started one.
+        return {
+          ...echoedThread(this.#runtimeDirectory, params),
+          initialTurnsPage: null,
+          itemsBackwardsCursor: '{"scope":{"kind":"itemsByCreatedAtOrdinal"}}',
+          runtimeWorkspaceRoots: [this.#runtimeDirectory],
+          turnsBackwardsCursor: '{"scope":{"kind":"turns"}}',
+        };
       case "turn/start": {
         this.#turnNumber += 1;
         const providerTurnId = `provider_turn_e2e_${this.#turnNumber}`;
@@ -168,6 +183,50 @@ async function run(): Promise<void> {
   });
 }
 
+const FINANCE_E2E_MODELS = ["gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"] as const;
+
+function catalogModel(model: string): Record<string, unknown> {
+  return {
+    additionalSpeedTiers: [],
+    availabilityNux: null,
+    defaultReasoningEffort: "medium",
+    defaultServiceTier: "default",
+    description: `Synthetisches E2E-Modell ${model}.`,
+    displayName: model,
+    hidden: false,
+    id: model,
+    inputModalities: ["text"],
+    isDefault: model === "gpt-5.6-sol",
+    model,
+    modelSpecialty: null,
+    multiAgentVersion: null,
+    serviceTiers: model === "gpt-5.4-mini"
+      ? []
+      : [{ description: "1.5x speed", id: "priority", name: "Fast" }],
+    supportedReasoningEfforts: ["low", "medium", "high"].map((reasoningEffort) => ({
+      description: reasoningEffort,
+      reasoningEffort,
+    })),
+    supportsPersonality: false,
+    upgrade: null,
+    upgradeInfo: null,
+  };
+}
+
+function echoedThread(runtimeDirectory: string, params: unknown): Record<string, unknown> {
+  const requested = params as {
+    config?: { model_reasoning_effort?: string };
+    model?: string;
+    serviceTier?: string;
+  };
+  return {
+    ...safeThread(runtimeDirectory),
+    model: requested.model ?? "gpt-5.6-luna",
+    reasoningEffort: requested.config?.model_reasoning_effort ?? "medium",
+    serviceTier: requested.serviceTier ?? "default",
+  };
+}
+
 function safeThread(runtimeDirectory: string): Record<string, unknown> {
   return {
     activePermissionProfile: null,
@@ -175,17 +234,17 @@ function safeThread(runtimeDirectory: string): Record<string, unknown> {
     approvalsReviewer: "user",
     cwd: runtimeDirectory,
     instructionSources: [],
-    model: "gpt-e2e-finance",
+    model: "gpt-5.6-luna",
     modelProvider: "openai",
     multiAgentMode: "explicitRequestOnly",
-    reasoningEffort: null,
+    reasoningEffort: "medium",
     runtimeWorkspaceRoots: [],
     sandbox: { networkAccess: false, type: "readOnly" },
-    serviceTier: null,
+    serviceTier: "default",
     thread: {
       agentNickname: null,
       agentRole: null,
-      cliVersion: "0.151.0",
+      cliVersion: SCHEMA_CODEX_VERSION,
       createdAt: 1,
       cwd: runtimeDirectory,
       ephemeral: false,

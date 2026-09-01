@@ -76,6 +76,9 @@ async def bind_conversation_runtime(
         session,
         conversation_id=conversation_id,
         provider_thread_id=payload.provider_thread_id,
+        provider_model=payload.provider_model,
+        provider_effort=payload.provider_effort,
+        provider_service_tier=payload.provider_service_tier,
         actor=actor,
     )
     return AssistantProviderRuntimeResponse(data=data)

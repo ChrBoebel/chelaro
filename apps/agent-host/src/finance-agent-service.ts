@@ -16,6 +16,7 @@ import {
 } from "./finance-auth-controller.js";
 import {
   inspectCodexProvider,
+  providerSnapshot,
   type CodexProviderOptions,
   type CodexProviderSnapshot,
 } from "./codex-provider.js";
@@ -23,17 +24,27 @@ import {
   FinanceAssistantStreamProjector,
   type FinanceChatStreamEvent,
 } from "./finance-chat-stream.js";
+import { isForbiddenNotificationMethod } from "./finance-notification-policy.js";
 import {
+  assertFinanceModelCatalogPage,
+  assertFinanceThreadUsage,
   assertFinanceThreadUnsubscribeResponse,
   assertFinanceThreadDeleteResponse,
   assertFinanceTurnStartResponse,
   assertSafeFinanceThreadResponse,
+  MAX_FINANCE_MODEL_CATALOG_PAGES,
+  type FinanceCatalogModel,
+  type FinanceThreadUsage,
 } from "./finance-response-validator.js";
 import { FinanceServerRequestHandler } from "./finance-server-request-handler.js";
 import {
+  assertFinanceModelSelection,
   buildFinanceThreadStartParams,
   buildFinanceThreadResumeParams,
   configuredMcpServerNames,
+  DEFAULT_FINANCE_MODEL_SELECTION,
+  FINANCE_SUPPORTED_MODELS,
+  type FinanceModelSelection,
 } from "./finance-thread-contract.js";
 import {
   FINANCE_TOOL_NAMES,
@@ -68,7 +79,7 @@ export interface FinanceAgentServiceOptions {
   consentJournal: FinanceConsentJournal;
   emit: (event: FinanceAgentEvent) => void;
   hostEpoch?: string;
-  model?: string;
+  modelSelection?: FinanceModelSelection;
   processFactory?: (callbacks: ProcessCallbacks) => FinanceCodexProcessPort;
   runtimeDirectory: string;
   temporaryDirectory?: string;
@@ -79,6 +90,7 @@ export interface FinanceAgentSnapshot {
   auth: FinanceChatState["auth"];
   consent: FinanceChatState["consent"];
   host: FinanceChatState["host"];
+  models: { available: FinanceCatalogModel[]; selected: FinanceModelSelection };
   provider: CodexProviderSnapshot;
   session: null | {
     conversationId: string | null;
@@ -86,6 +98,7 @@ export interface FinanceAgentSnapshot {
     status: NonNullable<FinanceChatState["session"]>["status"];
   };
   turn: null | { id: string; status: NonNullable<FinanceChatState["turn"]>["status"] };
+  usage: null | (FinanceThreadUsage & { compactions: number });
 }
 
 export type FinanceAgentEvent =
@@ -97,25 +110,29 @@ export class FinanceAgentService {
   #auth: FinanceAuthController | undefined;
   readonly #emitEvent: (event: FinanceAgentEvent) => void;
   readonly #hostEpoch: string;
-  readonly #model: string | undefined;
+  #selection: FinanceModelSelection;
+  #catalog: FinanceCatalogModel[] = [];
   readonly #options: FinanceAgentServiceOptions;
   #dispatcher: FinanceToolDispatcher | undefined;
   #handler: FinanceServerRequestHandler | undefined;
   #history: AssistantHistoryApi | undefined;
   #conversationId: string | undefined;
   #process: FinanceCodexProcessPort | undefined;
-  #provider: CodexProviderSnapshot = { status: "checking", version: null };
+  #provider: CodexProviderSnapshot = providerSnapshot("checking", null);
   #projector: FinanceAssistantStreamProjector | undefined;
   #state: FinanceChatState = INITIAL_FINANCE_CHAT_STATE;
   #turnStarting = false;
   #earlyTurnNotifications: ServerNotification[] = [];
+  #usage: FinanceAgentSnapshot["usage"] = null;
+  #lastCompactedProviderTurnId: string | undefined;
 
   constructor(options: FinanceAgentServiceOptions) {
     this.#options = options;
     this.#consent = options.consentJournal;
     this.#emitEvent = options.emit;
     this.#hostEpoch = validId(options.hostEpoch ?? randomUUID());
-    this.#model = options.model;
+    this.#selection = options.modelSelection ?? DEFAULT_FINANCE_MODEL_SELECTION;
+    assertFinanceModelSelection(this.#selection);
   }
 
   snapshot(): FinanceAgentSnapshot {
@@ -124,6 +141,10 @@ export class FinanceAgentService {
       auth: this.#state.auth,
       consent: { ...this.#state.consent },
       host: this.#state.host,
+      models: {
+        available: this.#catalog.map((model) => ({ ...model, efforts: [...model.efforts] })),
+        selected: { ...this.#selection },
+      },
       provider: { ...this.#provider },
       session: this.#state.session
         ? {
@@ -133,6 +154,7 @@ export class FinanceAgentService {
           }
         : null,
       turn: this.#state.turn ? { id: this.#state.turn.id, status: this.#state.turn.status } : null,
+      usage: this.#usage === null ? null : { ...this.#usage },
     };
   }
 
@@ -141,7 +163,7 @@ export class FinanceAgentService {
     this.#loadConsent();
     this.#transition({ type: "host.status", status: "ready" });
     if (this.#options.processFactory) {
-      this.#setProvider({ status: "ready", version: "test" });
+      this.#setProvider(providerSnapshot("ready", "test"));
       await this.#startProcessAfterGrant();
     } else if (this.#state.consent.status === "granted") {
       await this.refreshProvider();
@@ -175,20 +197,85 @@ export class FinanceAgentService {
     this.#consent.assertGranted(FINANCE_CONSENT_VERSION);
     if (this.#process && this.#auth) {
       await this.#auth.refresh();
-      return;
+    } else {
+      await this.#startProcessAfterGrant();
+      await this.#auth?.refresh().catch(() => {
+        this.#syncAuth("logged_out");
+      });
     }
-    await this.#startProcessAfterGrant();
-    await this.#auth?.refresh().catch(() => {
-      this.#syncAuth("logged_out");
-    });
+    // Runs on every refresh, not only on the first one: the catalog needs an
+    // authenticated account, which the owner may only establish later through
+    // `codex login` followed by another status check.
+    await this.refreshModelCatalog().catch(() => undefined);
   }
 
-  async createSession(sessionId: string, conversationId: string): Promise<void> {
+  /**
+   * Reads the Codex model catalog and keeps the subset the finance assistant
+   * may use. Contacting the provider requires the same consent and
+   * authentication gate as every other provider call.
+   */
+  async refreshModelCatalog(): Promise<FinanceCatalogModel[]> {
+    this.#consent.assertGranted(FINANCE_CONSENT_VERSION);
+    if (this.#state.auth !== "authenticated") {
+      throw new FinanceAgentServiceError("authentication_required");
+    }
+    const process = this.#requiredProcess();
+    const models: FinanceCatalogModel[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < MAX_FINANCE_MODEL_CATALOG_PAGES; page += 1) {
+      const response: unknown = await process.request(
+        "model/list",
+        cursor === null ? {} : { cursor },
+      );
+      const decoded = assertFinanceModelCatalogPage(response);
+      for (const model of decoded.models) {
+        if (!models.some((known) => known.model === model.model)) models.push(model);
+      }
+      cursor = decoded.nextCursor;
+      if (cursor === null) break;
+    }
+    // The allowlist is ordered newest first; Codex returns its own order, so
+    // the picker is sorted here instead of showing whatever arrives.
+    this.#catalog = FINANCE_SUPPORTED_MODELS.flatMap(
+      (model) => models.filter((offered) => offered.model === model),
+    );
+    this.#emit({ snapshot: this.snapshot(), type: "state.changed" });
+    return this.#catalog;
+  }
+
+  #assertOfferedSelection(selection: FinanceModelSelection): void {
+    // An empty catalog means the probe has not run or failed; the contract
+    // allowlist still applies, so the selection stays usable.
+    if (this.#catalog.length === 0) return;
+    const offered = this.#catalog.find((model) => model.model === selection.model);
+    if (
+      !offered ||
+      !offered.efforts.includes(selection.effort) ||
+      (selection.fastMode && !offered.supportsFastMode)
+    ) {
+      throw new FinanceAgentServiceError("model_not_available");
+    }
+  }
+
+  async createSession(
+    sessionId: string,
+    conversationId: string,
+    selection?: FinanceModelSelection,
+  ): Promise<void> {
     const dispatcher = this.#requiredDispatcher();
     const history = this.#requiredHistory();
     const validatedConversationId = validId(conversationId);
     this.#consent.assertGranted(FINANCE_CONSENT_VERSION);
     if (this.#state.auth !== "authenticated") throw new FinanceAgentServiceError("authentication_required");
+    if (selection !== undefined) {
+      assertFinanceModelSelection(selection);
+      this.#assertOfferedSelection(selection);
+    }
+    const requested = selection ?? this.#selection;
+    // Usage belongs to a thread, not to the host, so a new or reopened
+    // conversation starts from nothing until Codex reports for that thread.
+    this.#usage = null;
+    this.#lastCompactedProviderTurnId = undefined;
     this.#transition({ type: "session.start", consentVersion: FINANCE_CONSENT_VERSION, sessionId });
     let dispatcherStarted = false;
     try {
@@ -198,20 +285,37 @@ export class FinanceAgentService {
         includeLayers: false,
       });
       const disabledServers = configuredMcpServerNames(configuration);
-      const providerThreadId = await history.getConversationRuntime(validatedConversationId);
-      const operation = providerThreadId === null ? "start" : "resume";
+      const binding = await history.getConversationRuntime(validatedConversationId);
+      const operation = binding === null ? "start" : "resume";
+      // A resumed conversation keeps the configuration it was bound to unless
+      // the caller explicitly asked for a different one, so reopening a thread
+      // never silently changes the model its history was produced under.
+      const effective = binding !== null && selection === undefined ? binding.selection : requested;
       const response = await process.request(
         operation === "start" ? "thread/start" : "thread/resume",
         operation === "start"
-          ? buildFinanceThreadStartParams(this.#model, disabledServers)
-          : buildFinanceThreadResumeParams(providerThreadId!, this.#model, disabledServers),
+          ? buildFinanceThreadStartParams(effective, disabledServers)
+          : buildFinanceThreadResumeParams(binding!.providerThreadId, effective, disabledServers),
       );
-      assertSafeFinanceThreadResponse(response, this.#options.runtimeDirectory, operation);
-      if (providerThreadId !== null && response.thread.id !== providerThreadId) {
+      assertSafeFinanceThreadResponse(
+        response,
+        this.#options.runtimeDirectory,
+        operation,
+        effective,
+      );
+      if (binding !== null && response.thread.id !== binding.providerThreadId) {
         throw new FinanceAgentServiceError("protocol_incompatible");
       }
-      if (providerThreadId === null) {
-        await history.bindConversationRuntime(validatedConversationId, response.thread.id);
+      // Written after the echo check, so the stored binding always names the
+      // configuration the thread verifiably runs on. A resume that keeps its
+      // configuration writes nothing, which keeps `provider_bound` in the
+      // audit meaningful: it marks a new or changed binding, not every reopen.
+      if (binding === null || !sameSelection(binding.selection, effective)) {
+        await history.bindConversationRuntime(
+          validatedConversationId,
+          response.thread.id,
+          effective,
+        );
       }
       dispatcher.startSession({
         consentVersion: FINANCE_CONSENT_VERSION,
@@ -221,7 +325,15 @@ export class FinanceAgentService {
       });
       dispatcherStarted = true;
       this.#conversationId = validatedConversationId;
-      this.#transition({ type: "session.ready", providerThreadId: response.thread.id, sessionId });
+      // Only adopt the selection once Codex echoed it back unchanged, so the
+      // snapshot never advertises a configuration the thread does not run on.
+      this.#selection = { ...effective };
+      this.#transition({
+        type: "session.ready",
+        providerThreadId: response.thread.id,
+        resumed: operation === "resume",
+        sessionId,
+      });
     } catch (error) {
       if (dispatcherStarted) {
         try { dispatcher.closeSession(); } catch { /* The failed session remains unavailable. */ }
@@ -401,6 +513,14 @@ export class FinanceAgentService {
       }
       return;
     }
+    if (notification.method === "thread/tokenUsage/updated") {
+      this.#recordTokenUsage(notification.params.threadId, notification.params.tokenUsage);
+      return;
+    }
+    if (notification.method === "thread/compacted") {
+      this.#recordCompaction(notification.params.threadId, notification.params.turnId);
+      return;
+    }
     if (this.#turnStarting && isTurnNotification(notification)) {
       if (this.#earlyTurnNotifications.length >= MAX_EARLY_TURN_NOTIFICATIONS) {
         throw new FinanceAgentServiceError("protocol_incompatible");
@@ -441,6 +561,9 @@ export class FinanceAgentService {
         assertProviderTurn(notification.params.threadId, notification.params.turnId, session.providerThreadId, turn.providerTurnId);
         assertAllowedThreadItem(notification.params.item);
         if (notification.params.item.type === "dynamicToolCall") assertFinanceToolItem(notification.params.item);
+        if (notification.params.item.type === "contextCompaction") {
+          this.#recordCompaction(notification.params.threadId, notification.params.turnId);
+        }
         this.#requiredProjector().completeItem(notification.params);
         return;
       case "turn/completed": {
@@ -467,6 +590,44 @@ export class FinanceAgentService {
     }
   }
 
+  /**
+   * Codex reports token usage per thread. Chelaro only ever holds one thread,
+   * so a report for a different one means the stream is not the one the
+   * session was verified against.
+   */
+  #recordTokenUsage(providerThreadId: string, tokenUsage: unknown): void {
+    const session = this.#state.session;
+    if (!session?.providerThreadId) return;
+    if (providerThreadId !== session.providerThreadId) {
+      throw new FinanceAgentServiceError("protocol_incompatible");
+    }
+    const usage = assertFinanceThreadUsage(tokenUsage);
+    this.#usage = { ...usage, compactions: this.#usage?.compactions ?? 0 };
+    this.#emit({ snapshot: this.snapshot(), type: "state.changed" });
+  }
+
+  /**
+   * Codex announces a compaction both as a `contextCompaction` item and as the
+   * deprecated `thread/compacted` notification. Both carry the turn they
+   * belong to, so the last one seen is enough to count each compaction once.
+   */
+  #recordCompaction(providerThreadId: string, providerTurnId: string): void {
+    const session = this.#state.session;
+    if (!session?.providerThreadId) return;
+    if (providerThreadId !== session.providerThreadId) {
+      throw new FinanceAgentServiceError("protocol_incompatible");
+    }
+    if (providerTurnId === this.#lastCompactedProviderTurnId) return;
+    this.#lastCompactedProviderTurnId = providerTurnId;
+    this.#usage = {
+      compactions: (this.#usage?.compactions ?? 0) + 1,
+      contextWindow: this.#usage?.contextWindow ?? null,
+      totalTokens: this.#usage?.totalTokens ?? 0,
+      usedTokens: this.#usage?.usedTokens ?? 0,
+    };
+    this.#emit({ snapshot: this.snapshot(), type: "state.changed" });
+  }
+
   async #handleServerRequest(request: ServerRequest): Promise<unknown> {
     if (!this.#handler) throw new FinanceAgentServiceError("finance_api_unavailable");
     if (typeof request.id !== "number") throw new FinanceAgentServiceError("protocol_incompatible");
@@ -475,7 +636,7 @@ export class FinanceAgentService {
 
   #handleFatalProcessError(): void {
     const activeTurnId = isActiveTurn(this.#state.turn) ? this.#state.turn.id : undefined;
-    this.#setProvider({ status: "error", version: this.#provider.version });
+    this.#setProvider(providerSnapshot("error", this.#provider.version));
     this.#projector?.abort();
     this.#projector = undefined;
     this.#dispatcher?.abandonSession();
@@ -528,7 +689,7 @@ export class FinanceAgentService {
       const providerOptions = this.#options.codexProvider;
       const temporaryDirectory = this.#options.temporaryDirectory;
       if (!providerOptions || !temporaryDirectory) throw new FinanceAgentServiceError("invalid_configuration");
-      this.#setProvider({ status: "checking", version: null });
+      this.#setProvider(providerSnapshot("checking", null));
       const inspection = inspectCodexProvider(providerOptions);
       this.#setProvider(inspection.snapshot);
       if (!inspection.launch) return;
@@ -557,7 +718,7 @@ export class FinanceAgentService {
     } catch {
       await process.stop().catch(() => undefined);
       this.#process = undefined;
-      this.#setProvider({ status: "error", version: this.#provider.version });
+      this.#setProvider(providerSnapshot("error", this.#provider.version));
       this.#transition({ type: "app_server.status", status: "stopping" });
       this.#transition({ type: "app_server.status", status: "stopped" });
     }
@@ -667,6 +828,7 @@ export class FinanceAgentServiceError extends Error {
     | "invalid_configuration"
     | "invalid_request"
     | "invalid_state"
+    | "model_not_available"
     | "protocol_incompatible"
     | "resource_not_found"
     | "session_busy"
@@ -691,9 +853,20 @@ function assertFinanceToolItem(item: Extract<Parameters<typeof assertAllowedThre
 }
 
 function assertAllowedThreadItem(item: Parameters<FinanceAssistantStreamProjector["completeItem"]>[0]["item"]): void {
-  if (!["userMessage", "agentMessage", "reasoning", "dynamicToolCall"].includes(item.type)) {
+  // `contextCompaction` carries no content of its own — it only marks that
+  // Codex condensed the history to stay inside the context window, which a
+  // long-lived conversation has to survive rather than treat as unsafe.
+  if (!["userMessage", "agentMessage", "reasoning", "dynamicToolCall", "contextCompaction"].includes(item.type)) {
     throw new FinanceAgentServiceError("unsafe_codex_configuration");
   }
+}
+
+function sameSelection(left: FinanceModelSelection, right: FinanceModelSelection): boolean {
+  return (
+    left.model === right.model &&
+    left.effort === right.effort &&
+    left.fastMode === right.fastMode
+  );
 }
 
 function assertProviderTurn(actualThread: string, actualTurn: string, expectedThread: string, expectedTurn: string): void {
@@ -713,9 +886,7 @@ function isTurnNotification(notification: ServerNotification): boolean {
 }
 
 function isForbiddenNotification(notification: ServerNotification): boolean {
-  return /(?:command|process|fileChange|mcp|plan|hook|webSearch|image|collab|subAgent|permissions|patch|diff|approval|guardian|review|environment|externalAgent|thread\/goal|thread\/project|project\/|realtime|fs\/)/i.test(
-    notification.method,
-  );
+  return isForbiddenNotificationMethod(notification.method);
 }
 
 function isActiveTurn(turn: FinanceChatState["turn"]): turn is NonNullable<FinanceChatState["turn"]> {
