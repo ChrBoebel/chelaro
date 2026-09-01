@@ -11,7 +11,7 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
-## [0.5.1] - 2026-09-01
+## [0.5.2] - 2026-09-01
 
 ### Added
 
@@ -27,6 +27,8 @@ All notable Chelaro changes are recorded here. The format follows
 - `FINANCE_OS_CODEX_BINARY_PATH` is documented. It points Chelaro at a specific Codex executable, so
   the assistant can run on its own pinned copy while the global CLI stays current. It accepts a path
   and never arguments, so the App Server hardening stays in place.
+
+## [0.5.1] - 2026-09-01
 
 ### Changed
 
