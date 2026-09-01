@@ -92,7 +92,7 @@ Herkunft einer Zahl oder die Autorität des Owners verdecken.
 
 ### Codex-Finanzassistent lokal
 
-Der optionale Finanzassistent verwendet eine bereits installierte Codex CLI `0.151.0` und deren
+Der optionale Finanzassistent verwendet eine bereits installierte Codex CLI `0.152.0` und deren
 bestehende Anmeldung. Falls nötig, führe einmal `codex login` im Terminal aus und klicke in Chelaro
 auf „Status erneut prüfen“. Chelaro enthält keinen zweiten Login, liest keine Codex-Credentials und
 meldet die globale CLI nicht ab. Ohne passende Codex-Installation bleiben alle übrigen lokalen

@@ -53,7 +53,7 @@ interface FinanceAssistantSnapshot {
   consent: { status: ConsentStatus; version: string | null };
   host: HostStatus;
   models: { available: CatalogModel[]; selected: ModelSelection };
-  provider: { status: ProviderStatus; version: string | null };
+  provider: { status: ProviderStatus; supportedVersions: string[]; version: string | null };
   session: null | { conversationId: string | null; id: string; status: SessionStatus };
   turn: null | { id: string; status: TurnStatus };
   usage: ThreadUsage | null;
@@ -663,20 +663,33 @@ function ProviderPanel({
           : authenticated
             ? "Codex ist bereit"
             : "Codex-Anmeldung erforderlich";
+  // The version the message names comes from the running host, not from a
+  // literal in this file, so it stays true across a Codex upgrade.
+  const newestSupported = provider.supportedVersions[0];
+  const supportedList = describeSupportedVersions(provider.supportedVersions);
+  const command = provider.status === "not_found" || provider.status === "unsupported"
+    ? newestSupported === undefined
+      ? null
+      : `npm install -g @openai/codex@${newestSupported}`
+    : provider.status === "ready" && !authenticated
+      ? "codex login"
+      : null;
   return (
     <div className="mt-5 rounded-panel border border-line bg-paper p-6 shadow-panel sm:p-8">
       <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-accent">Lokale Codex CLI</p>
       <h2 className="mt-3 text-2xl font-medium tracking-[-0.035em] text-ink">{title}</h2>
       <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
         {provider.status === "not_found"
-          ? "Installiere die Codex CLI. Deine übrigen Finanzfunktionen bleiben nutzbar."
+          ? `Installiere ${supportedList}. Deine übrigen Finanzfunktionen bleiben nutzbar.`
           : provider.status === "unsupported"
-            ? `Installiert ist ${provider.version ?? "eine unbekannte Version"}; Chelaro benötigt die geprüfte Version 0.151.0.`
-            : "Chelaro verwendet dieselbe lokale Anmeldung wie deine Codex CLI. Führe bei Bedarf im Terminal codex login aus; Chelaro liest oder kopiert keine Anmeldedatei."}
+            ? `Installiert ist ${provider.version ?? "eine unbekannte Version"}; Chelaro benötigt ${supportedList}. Deine Zustimmung und deine gespeicherten Unterhaltungen bleiben erhalten.`
+            : provider.status === "error"
+              ? "Die installierte Codex CLI hat nicht geantwortet. Prüfe im Terminal, ob codex --version läuft."
+              : "Chelaro verwendet dieselbe lokale Anmeldung wie deine Codex CLI. Führe bei Bedarf im Terminal codex login aus; Chelaro liest oder kopiert keine Anmeldedatei."}
       </p>
-      {provider.status === "ready" && !authenticated ? (
-        <code className="mt-5 block w-fit rounded-lg bg-surface px-4 py-3 font-mono text-sm text-ink">codex login</code>
-      ) : null}
+      {command === null ? null : (
+        <code className="mt-5 block w-fit rounded-lg bg-surface px-4 py-3 font-mono text-sm text-ink">{command}</code>
+      )}
       <Button size="regular" className="mt-6" disabled={disabled} onClick={onRefresh}>
         {disabled ? "Status wird geprüft …" : "Status erneut prüfen"}
       </Button>
@@ -1359,8 +1372,9 @@ function parseSnapshot(value: unknown): FinanceAssistantSnapshot | null {
     !isOneOf(value.consent.status, ["unknown", "granted", "revoke_pending", "revoked"]) ||
     !(value.consent.version === null || typeof value.consent.version === "string") ||
     !isRecord(value.provider) ||
-    !exactKeys(value.provider, ["status", "version"]) ||
+    !exactKeys(value.provider, ["status", "supportedVersions", "version"]) ||
     !isOneOf(value.provider.status, ["checking", "ready", "not_found", "unsupported", "error"]) ||
+    !validSupportedVersions(value.provider.supportedVersions) ||
     !(value.provider.version === null || typeof value.provider.version === "string") ||
     !validModels(value.models) ||
     !validSession(value.session) ||
@@ -1500,6 +1514,21 @@ function failMessage(
   setMessages((current) => current.map((message) =>
     message.id === key ? { ...message, status: "failed", text: "" } : message,
   ));
+}
+
+function validSupportedVersions(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.length <= 8 &&
+    value.every((entry) => typeof entry === "string" && /^\d+\.\d+\.\d+$/.test(entry))
+  );
+}
+
+function describeSupportedVersions(versions: readonly string[]): string {
+  if (versions.length === 0) return "eine geprüfte Codex-Version";
+  if (versions.length === 1) return `die geprüfte Codex CLI ${versions[0]}`;
+  return `eine geprüfte Codex CLI (${versions.join(", ")})`;
 }
 
 function exactKeys(value: Record<string, unknown>, keys: string[]): boolean {

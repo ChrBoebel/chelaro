@@ -24,7 +24,7 @@ existing credential store.
   refresh. There is no Chelaro-owned login, logout, device code, or external-login IPC path.
 - Missing, failed, and unsupported CLI installations are visible provider states. They disable
   only the assistant; the rest of Chelaro and the local finance data remain available.
-- Protocol compatibility fails closed. This revision supports Codex CLI `0.151.0`; an upgrade must
+- Protocol compatibility fails closed. This revision supports Codex CLI `0.152.0`; an upgrade must
   update the exact package pin, generated schemas, compatibility constant, real App Server tests,
   and security review together.
 - Before thread creation, Chelaro reads the effective App Server configuration through

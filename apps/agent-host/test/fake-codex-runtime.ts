@@ -1,5 +1,7 @@
 import { createInterface } from "node:readline";
 
+import { SUPPORTED_CODEX_VERSION } from "../src/codex-provider.js";
+
 const badIdentity = process.argv.includes("--bad-identity");
 const input = createInterface({ input: process.stdin, crlfDelay: Number.POSITIVE_INFINITY });
 let pendingClientRequest: number | undefined;
@@ -12,7 +14,7 @@ input.on("line", (line) => {
       codexHome: process.env.CODEX_HOME,
       platformFamily: "unix",
       platformOs: badIdentity ? "linux" : "macos",
-      userAgent: "finance-os/0.151.0 (fake) unknown (finance-os; 0.1.0)",
+      userAgent: `finance-os/${SUPPORTED_CODEX_VERSION} (fake) unknown (finance-os; 0.1.0)`,
     });
     notify("account/updated", { authMode: null, planType: null });
     return;

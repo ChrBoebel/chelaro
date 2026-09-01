@@ -16,6 +16,7 @@ import {
 } from "./finance-auth-controller.js";
 import {
   inspectCodexProvider,
+  providerSnapshot,
   type CodexProviderOptions,
   type CodexProviderSnapshot,
 } from "./codex-provider.js";
@@ -116,7 +117,7 @@ export class FinanceAgentService {
   #history: AssistantHistoryApi | undefined;
   #conversationId: string | undefined;
   #process: FinanceCodexProcessPort | undefined;
-  #provider: CodexProviderSnapshot = { status: "checking", version: null };
+  #provider: CodexProviderSnapshot = providerSnapshot("checking", null);
   #projector: FinanceAssistantStreamProjector | undefined;
   #state: FinanceChatState = INITIAL_FINANCE_CHAT_STATE;
   #turnStarting = false;
@@ -161,7 +162,7 @@ export class FinanceAgentService {
     this.#loadConsent();
     this.#transition({ type: "host.status", status: "ready" });
     if (this.#options.processFactory) {
-      this.#setProvider({ status: "ready", version: "test" });
+      this.#setProvider(providerSnapshot("ready", "test"));
       await this.#startProcessAfterGrant();
     } else if (this.#state.consent.status === "granted") {
       await this.refreshProvider();
@@ -634,7 +635,7 @@ export class FinanceAgentService {
 
   #handleFatalProcessError(): void {
     const activeTurnId = isActiveTurn(this.#state.turn) ? this.#state.turn.id : undefined;
-    this.#setProvider({ status: "error", version: this.#provider.version });
+    this.#setProvider(providerSnapshot("error", this.#provider.version));
     this.#projector?.abort();
     this.#projector = undefined;
     this.#dispatcher?.abandonSession();
@@ -687,7 +688,7 @@ export class FinanceAgentService {
       const providerOptions = this.#options.codexProvider;
       const temporaryDirectory = this.#options.temporaryDirectory;
       if (!providerOptions || !temporaryDirectory) throw new FinanceAgentServiceError("invalid_configuration");
-      this.#setProvider({ status: "checking", version: null });
+      this.#setProvider(providerSnapshot("checking", null));
       const inspection = inspectCodexProvider(providerOptions);
       this.#setProvider(inspection.snapshot);
       if (!inspection.launch) return;
@@ -716,7 +717,7 @@ export class FinanceAgentService {
     } catch {
       await process.stop().catch(() => undefined);
       this.#process = undefined;
-      this.#setProvider({ status: "error", version: this.#provider.version });
+      this.#setProvider(providerSnapshot("error", this.#provider.version));
       this.#transition({ type: "app_server.status", status: "stopping" });
       this.#transition({ type: "app_server.status", status: "stopped" });
     }
