@@ -369,7 +369,7 @@ async def test_desktop_database_backfills_the_explicit_model_binding(tmp_path: P
 
     assert version == 5
     # The thread survives untouched; only the configuration is new.
-    assert binding == [(1, "provider_thread_legacy", "gpt-5.5", "medium", "default")]
+    assert binding == [(1, "provider_thread_legacy", "gpt-5.6-luna", "medium", "default")]
     assert violations == []
     await database.dispose()
 

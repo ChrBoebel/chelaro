@@ -19,8 +19,10 @@ import {
   buildFinanceThreadStartParams,
   configuredMcpServerNames,
   DEFAULT_FINANCE_MODEL_SELECTION,
+  FINANCE_CODE_MODE_MODELS,
   FINANCE_SUPPORTED_MODELS,
 } from "../src/finance-thread-contract.js";
+import { FINANCE_TOOL_NAMES } from "../src/finance-tool-contract.js";
 import { JsonRpcClient } from "../src/json-rpc-client.js";
 
 const codexEntry = resolve(
@@ -29,10 +31,13 @@ const codexEntry = resolve(
 );
 
 // Every allowlisted model is verified separately: the tool-routing path is a
-// property of the model, not of the thread contract. GPT-5.6 routes through
-// Code Mode and declares collaboration tools at the provider edge, which is
-// why it is not on the allowlist.
+// property of the model, not of the thread contract. Direct-calling models must
+// show the eight finance functions in `tools`; a Code Mode model must show the
+// isolated `exec` router instead, carrying exactly those eight functions and
+// nothing else. `gpt-5.6-sol` and `gpt-5.6-terra` fail the second check with a
+// `collaboration` namespace, which is why they are not on the allowlist.
 for (const model of FINANCE_SUPPORTED_MODELS) {
+const routesThroughCodeMode = (FINANCE_CODE_MODE_MODELS as readonly string[]).includes(model);
 test(`provider edge: real App Server exposes exactly the eight finance tools on ${model}`, async () => {
   const requests: Array<{ body: unknown; method: string; url: string }> = [];
   const provider = await startServer(async (request, response) => {
@@ -126,17 +131,31 @@ test(`provider edge: real App Server exposes exactly the eight finance tools on 
     const responseRequests = requests.filter(({ method, url }) => method === "POST" && url === "/v1/responses");
     assert.equal(responseRequests.length, 1);
     const body = responseRequests[0]?.body as {
-      input?: Array<{ type?: string }>;
+      input?: Array<{ type?: string; tools?: unknown[] }>;
       tools?: unknown[];
     };
-    assert.deepEqual(body.tools, expectedProviderTools());
-    // A Code Mode model would carry its tool surface in `additional_tools`
-    // instead, hiding whatever it declares there from the assertion above.
-    assert.equal(
-      (body.input ?? []).some((entry) => entry.type === "additional_tools"),
-      false,
-      `${model} routed tools through Code Mode instead of direct function calls`,
+    const codeModeEntries = (body.input ?? []).filter((entry) => entry.type === "additional_tools");
+
+    if (!routesThroughCodeMode) {
+      assert.deepEqual(body.tools, expectedProviderTools());
+      // A Code Mode model would carry its tool surface in `additional_tools`
+      // instead, hiding whatever it declares there from the assertion above.
+      assert.deepEqual(codeModeEntries, [], `${model} unexpectedly routed through Code Mode`);
+      return;
+    }
+
+    // ADR 0012 permits exactly one indirection: the isolated JavaScript router.
+    // `wait` resumes a yielded `exec` cell and grants nothing on its own.
+    assert.deepEqual(body.tools ?? [], []);
+    assert.equal(codeModeEntries.length, 1, `${model} did not route through Code Mode`);
+    assert.deepEqual(
+      providerEdgeToolNames(codeModeEntries[0]?.tools ?? []),
+      ["namespace:functions", "exec", "wait"],
+      `${model} exposes more than the isolated Code Mode router`,
     );
+    // The router's own `tools` object is the real boundary: it is described in
+    // the `exec` declaration and must name the eight finance functions only.
+    assert.deepEqual(codeModeRouterTools(codeModeEntries[0]?.tools ?? []), [...FINANCE_TOOL_NAMES].sort());
   } finally {
     rpc.close();
     child.kill("SIGTERM");
@@ -147,6 +166,48 @@ test(`provider edge: real App Server exposes exactly the eight finance tools on 
     rmSync(temporaryRoot, { recursive: true, force: true });
   }
 });
+}
+
+function providerEdgeToolNames(node: unknown, names: string[] = []): string[] {
+  if (Array.isArray(node)) {
+    for (const entry of node) providerEdgeToolNames(entry, names);
+    return names;
+  }
+  if (typeof node !== "object" || node === null) return names;
+  const tool = node as { name?: unknown; tools?: unknown; type?: unknown };
+  if (tool.type === "namespace") {
+    names.push(`namespace:${String(tool.name)}`);
+    return providerEdgeToolNames(tool.tools, names);
+  }
+  if (typeof tool.name === "string") names.push(tool.name);
+  return providerEdgeToolNames(tool.tools, names);
+}
+
+/**
+ * Reads the tool names the `exec` router advertises inside its isolate. The
+ * router documents each nested tool as a `### \`name\`` heading in its own
+ * description, which is the only place the provider learns they exist.
+ */
+function codeModeRouterTools(node: unknown): string[] {
+  const description = findExecDescription(node);
+  assert.equal(typeof description, "string", "The Code Mode router carried no declaration");
+  return [...String(description).matchAll(/^### `([a-z0-9_]+)`$/gmu)]
+    .flatMap(([, name]) => (name === undefined ? [] : [name]))
+    .sort();
+}
+
+function findExecDescription(node: unknown): string | undefined {
+  if (Array.isArray(node)) {
+    for (const entry of node) {
+      const found = findExecDescription(entry);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  if (typeof node !== "object" || node === null) return undefined;
+  const tool = node as { description?: unknown; name?: unknown; tools?: unknown };
+  if (tool.name === "exec" && typeof tool.description === "string") return tool.description;
+  return findExecDescription(tool.tools);
 }
 
 function expectedProviderTools(): unknown[] {

@@ -43,11 +43,19 @@ class SyntheticFinanceProcess {
       case "model/list":
         return { data: FINANCE_E2E_MODELS.map(catalogModel), nextCursor: null };
       case "thread/start":
-      case "thread/resume":
         // ADR 0014 only accepts a thread that echoes the requested model,
         // effort, and service tier, so the synthetic App Server has to answer
         // the way the real one does.
         return echoedThread(this.#runtimeDirectory, params);
+      case "thread/resume":
+        // A resumed thread carries three more fields than a started one.
+        return {
+          ...echoedThread(this.#runtimeDirectory, params),
+          initialTurnsPage: null,
+          itemsBackwardsCursor: '{"scope":{"kind":"itemsByCreatedAtOrdinal"}}',
+          runtimeWorkspaceRoots: [this.#runtimeDirectory],
+          turnsBackwardsCursor: '{"scope":{"kind":"turns"}}',
+        };
       case "turn/start": {
         this.#turnNumber += 1;
         const providerTurnId = `provider_turn_e2e_${this.#turnNumber}`;
@@ -174,7 +182,7 @@ async function run(): Promise<void> {
   });
 }
 
-const FINANCE_E2E_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"] as const;
+const FINANCE_E2E_MODELS = ["gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"] as const;
 
 function catalogModel(model: string): Record<string, unknown> {
   return {
@@ -187,7 +195,7 @@ function catalogModel(model: string): Record<string, unknown> {
     hidden: false,
     id: model,
     inputModalities: ["text"],
-    isDefault: model === "gpt-5.5",
+    isDefault: model === "gpt-5.6-sol",
     model,
     modelSpecialty: null,
     multiAgentVersion: null,
@@ -212,7 +220,7 @@ function echoedThread(runtimeDirectory: string, params: unknown): Record<string,
   };
   return {
     ...safeThread(runtimeDirectory),
-    model: requested.model ?? "gpt-5.5",
+    model: requested.model ?? "gpt-5.6-luna",
     reasoningEffort: requested.config?.model_reasoning_effort ?? "medium",
     serviceTier: requested.serviceTier ?? "default",
   };
@@ -225,7 +233,7 @@ function safeThread(runtimeDirectory: string): Record<string, unknown> {
     approvalsReviewer: "user",
     cwd: runtimeDirectory,
     instructionSources: [],
-    model: "gpt-5.5",
+    model: "gpt-5.6-luna",
     modelProvider: "openai",
     multiAgentMode: "explicitRequestOnly",
     reasoningEffort: "medium",

@@ -10,6 +10,7 @@ import {
   assertFinanceTurnStartResponse,
   assertSafeFinanceThreadResponse,
 } from "../src/finance-response-validator.js";
+import { DEFAULT_FINANCE_MODEL_SELECTION } from "../src/finance-thread-contract.js";
 
 function safeThread(runtimeDirectory: string): Record<string, unknown> {
   return {
@@ -18,7 +19,7 @@ function safeThread(runtimeDirectory: string): Record<string, unknown> {
     approvalsReviewer: "user",
     cwd: runtimeDirectory,
     instructionSources: [],
-    model: "gpt-5.5",
+    model: DEFAULT_FINANCE_MODEL_SELECTION.model,
     modelProvider: "openai",
     multiAgentMode: "explicitRequestOnly",
     reasoningEffort: "medium",
@@ -58,6 +59,47 @@ test("finance response validator: accepts the exact pinned read-only thread proj
   const root = realpathSync(mkdtempSync(join(tmpdir(), "finance-response-")));
   try {
     assert.doesNotThrow(() => assertSafeFinanceThreadResponse(safeThread(root), root));
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+});
+
+test("finance response validator: accepts a resumed thread without provider history", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "finance-response-")));
+  // A resumed thread carries three fields a started one does not. Measured
+  // against the pinned App Server; rejecting them made every real resume fail.
+  const resumed = {
+    ...safeThread(root),
+    initialTurnsPage: null,
+    itemsBackwardsCursor: '{"scope":{"kind":"itemsByCreatedAtOrdinal"}}',
+    // A resumed thread names the workspace it was started in; a started one
+    // reports none. Demanding an empty list made every real resume fail.
+    runtimeWorkspaceRoots: [root],
+    turnsBackwardsCursor: '{"scope":{"kind":"turns"}}',
+  };
+  try {
+    assert.doesNotThrow(() => assertSafeFinanceThreadResponse(resumed, root, "resume"));
+    // The started shape is not a resumed shape and vice versa.
+    assert.throws(() => assertSafeFinanceThreadResponse(safeThread(root), root, "resume"));
+    assert.throws(() => assertSafeFinanceThreadResponse(resumed, root, "start"));
+    // Chelaro renders its own database, so hydrated provider history is refused.
+    assert.throws(() => assertSafeFinanceThreadResponse(
+      { ...resumed, initialTurnsPage: { items: [], nextCursor: null } },
+      root,
+      "resume",
+    ));
+    // A workspace root outside Chelaro's runtime directory stays forbidden,
+    // and a started thread may still not name one at all.
+    assert.throws(() => assertSafeFinanceThreadResponse(
+      { ...resumed, runtimeWorkspaceRoots: [root, tmpdir()] },
+      root,
+      "resume",
+    ));
+    assert.throws(() => assertSafeFinanceThreadResponse(
+      { ...safeThread(root), runtimeWorkspaceRoots: [root] },
+      root,
+      "start",
+    ));
   } finally {
     rmSync(root, { force: true, recursive: true });
   }

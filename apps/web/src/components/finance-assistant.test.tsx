@@ -10,10 +10,11 @@ const baseSnapshot = {
   host: "ready",
   models: {
     available: [
+      { efforts: ["low", "medium", "high"], model: "gpt-5.6-luna", supportsFastMode: true },
       { efforts: ["low", "medium", "high"], model: "gpt-5.5", supportsFastMode: true },
       { efforts: ["low", "medium", "high"], model: "gpt-5.4-mini", supportsFastMode: false },
     ],
-    selected: { effort: "medium", fastMode: false, model: "gpt-5.5" },
+    selected: { effort: "medium", fastMode: false, model: "gpt-5.6-luna" },
   },
   provider: { status: "ready", version: "0.151.0" },
   session: null,
@@ -292,6 +293,27 @@ describe("FinanceAssistant", () => {
     expect((prompt as HTMLTextAreaElement).value).toBe("Wie war mein Monat?");
   });
 
+  it("offers the newest verified model first and preselects it", async () => {
+    const authenticated = {
+      ...baseSnapshot,
+      auth: "authenticated",
+      consent: { status: "granted", version: "2026-08-31.v2" },
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ snapshot: authenticated })));
+
+    render(<FinanceAssistant />);
+
+    const picker = await screen.findByLabelText("Modell");
+    // The host orders the catalog newest first; an owner starting a
+    // conversation must not land on an older model by accident.
+    expect([...(picker as HTMLSelectElement).options].map((option) => option.value)).toEqual([
+      "gpt-5.6-luna",
+      "gpt-5.5",
+      "gpt-5.4-mini",
+    ]);
+    expect((picker as HTMLSelectElement).value).toBe("gpt-5.6-luna");
+  });
+
   it("names the reason a rejected action failed instead of suggesting a retry", async () => {
     const authenticated = {
       ...baseSnapshot,
@@ -382,7 +404,7 @@ describe("FinanceAssistant", () => {
     expect(JSON.parse(String(sessionCall?.[1]?.body)).model_selection).toEqual({
       effort: "medium",
       fast_mode: false,
-      model: "gpt-5.5",
+      model: "gpt-5.6-luna",
     });
   });
 });

@@ -26,6 +26,11 @@ data store. It must also keep Chelaro's proposal-only mutation boundary unchange
   Chelaro's database, not provider history hydration, is the UI source of truth.
 - Do not silently replace a missing or incompatible provider thread with a new one. Surface context
   loss so the user can make an explicit choice.
+- Validate a resumed thread against the shape a resume actually has. Codex answers `thread/resume`
+  with three fields `thread/start` does not carry — the first page of provider history and two
+  cursors for paging further back — and it names the workspace the thread was started in. The
+  contract is exact per operation: the history page must stay empty because Chelaro's database is
+  the source of truth, and no workspace root outside Chelaro's runtime directory is accepted.
 - Let a resumed thread reattach to the identifier it was bound to. The host's per-epoch identifier
   ledger rejects a reused identifier because a provider that reuses one can confuse two resources;
   a resumed conversation, however, necessarily names its own thread again. The ledger therefore

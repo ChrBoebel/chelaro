@@ -39,7 +39,7 @@ export interface FinanceThreadUsage {
   usedTokens: number;
 }
 
-const exactThreadResponseKeys = [
+const exactThreadStartResponseKeys = [
   "activePermissionProfile",
   "approvalPolicy",
   "approvalsReviewer",
@@ -54,6 +54,21 @@ const exactThreadResponseKeys = [
   "serviceTier",
   "thread",
 ].sort();
+
+/**
+ * A resumed thread carries three fields a started one does not: the first page
+ * of provider-side history and the two cursors for paging further back.
+ * Chelaro's own database is the source of truth for the visible conversation
+ * (ADR 0013), so the cursors are never followed and the page must stay empty.
+ */
+const exactThreadResumeResponseKeys = [
+  ...exactThreadStartResponseKeys,
+  "initialTurnsPage",
+  "itemsBackwardsCursor",
+  "turnsBackwardsCursor",
+].sort();
+
+const MAX_THREAD_CURSOR_LENGTH = 4096;
 
 export function assertFinanceAccountResponse(value: unknown): asserts value is GetAccountResponse {
   validateGetAccountResponse(value);
@@ -72,8 +87,11 @@ export function assertSafeFinanceThreadResponse(
   else validateThreadStartResponse(value);
   const response = value as (ThreadResumeResponse | ThreadStartResponse) & Record<string, unknown>;
   const runtimeRoot = realpathSync(runtimeDirectory);
+  const expectedKeys = operation === "resume"
+    ? exactThreadResumeResponseKeys
+    : exactThreadStartResponseKeys;
   if (
-    JSON.stringify(Object.keys(response).sort()) !== JSON.stringify(exactThreadResponseKeys) ||
+    JSON.stringify(Object.keys(response).sort()) !== JSON.stringify(expectedKeys) ||
     response.approvalPolicy !== "never" ||
     response.approvalsReviewer !== "user" ||
     response.modelProvider !== "openai" ||
@@ -85,7 +103,12 @@ export function assertSafeFinanceThreadResponse(
     response.serviceTier !== financeServiceTier(selection.fastMode) ||
     realpathSync(response.cwd) !== runtimeRoot ||
     response.instructionSources.length !== 0 ||
-    !isEmptyArray(response.runtimeWorkspaceRoots) ||
+    // A started thread reports no workspace root at all; a resumed one reports
+    // the directory it was started in. Both are exact: nothing outside
+    // Chelaro's own runtime directory may ever appear here.
+    !(operation === "resume"
+      ? isRuntimeOnlyWorkspace(response.runtimeWorkspaceRoots, runtimeRoot)
+      : isEmptyArray(response.runtimeWorkspaceRoots)) ||
     response.activePermissionProfile !== null ||
     response.multiAgentMode !== "explicitRequestOnly" ||
     response.sandbox.type !== "readOnly" ||
@@ -108,6 +131,20 @@ export function assertSafeFinanceThreadResponse(
   ) {
     throw unsafe("Codex returned an unsafe finance thread configuration.");
   }
+  if (operation === "resume" && (
+    // `excludeTurns` was requested, so a populated page would mean Codex sent
+    // conversation content Chelaro neither asked for nor renders.
+    response.initialTurnsPage !== null ||
+    !isUnusedCursor(response.turnsBackwardsCursor) ||
+    !isUnusedCursor(response.itemsBackwardsCursor)
+  )) {
+    throw unsafe("Codex returned unexpected history with the resumed finance thread.");
+  }
+}
+
+function isUnusedCursor(value: unknown): boolean {
+  return value === null ||
+    (typeof value === "string" && value.length > 0 && value.length <= MAX_THREAD_CURSOR_LENGTH);
 }
 
 export function assertFinanceTurnStartResponse(value: unknown): asserts value is TurnStartResponse {
@@ -241,6 +278,18 @@ function validProviderId(value: string): boolean {
 
 function isEmptyArray(value: unknown): value is [] {
   return Array.isArray(value) && value.length === 0;
+}
+
+function isRuntimeOnlyWorkspace(value: unknown, runtimeRoot: string): boolean {
+  if (!Array.isArray(value)) return false;
+  return value.every((root) => {
+    if (typeof root !== "string") return false;
+    try {
+      return realpathSync(root) === runtimeRoot;
+    } catch {
+      return false;
+    }
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

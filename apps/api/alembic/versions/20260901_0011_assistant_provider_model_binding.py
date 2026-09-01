@@ -18,9 +18,11 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 # Existing rows predate explicit selection. They ran on whatever the owner's
-# Codex configuration resolved to, which is not recoverable, so they adopt the
-# current Chelaro default and are re-bound on the next resume.
-_BACKFILL_MODEL = "gpt-5.5"
+# Codex configuration resolved to, which is not recoverable. The placeholder is
+# therefore the current Chelaro default rather than a guess about the past, so
+# a reopened conversation continues on the same model a new one would use. It
+# is re-bound on the next resume.
+_BACKFILL_MODEL = "gpt-5.6-luna"
 _BACKFILL_EFFORT = "medium"
 _BACKFILL_SERVICE_TIER = "default"
 

@@ -14,7 +14,10 @@ import {
 } from "../src/finance-agent-service.js";
 import { FinanceConsentJournal } from "../src/consent-journal.js";
 import type { FinanceToolApi } from "../src/finance-tool-dispatcher.js";
-import type { FinanceModelSelection } from "../src/finance-thread-contract.js";
+import {
+  DEFAULT_FINANCE_MODEL_SELECTION,
+  type FinanceModelSelection,
+} from "../src/finance-thread-contract.js";
 import { SessionTransitionError } from "../src/session-manager.js";
 import { legacyConsentGrantLine } from "./consent-fixtures.js";
 
@@ -49,8 +52,17 @@ class StubProcess {
       case "config/read":
         return { config: { mcp_servers: {} }, layers: null, origins: {} };
       case "thread/start":
-      case "thread/resume":
         return echoedThread(this.#runtimeDirectory, params);
+      case "thread/resume":
+        // The real App Server answers a resume with three more fields than a
+        // start; the stub has to, or the resume contract goes untested.
+        return {
+          ...echoedThread(this.#runtimeDirectory, params),
+          initialTurnsPage: null,
+          itemsBackwardsCursor: '{"scope":{"kind":"itemsByCreatedAtOrdinal"}}',
+          runtimeWorkspaceRoots: [this.#runtimeDirectory],
+          turnsBackwardsCursor: '{"scope":{"kind":"turns"}}',
+        };
       case "turn/start":
         if (this.earlyTurn) this.#emitCompletedTurn();
         return { turn: turn("provider_turn_1", "inProgress", []) };
@@ -476,7 +488,7 @@ test("finance agent service: durable revocation interrupts, closes, and stops be
     host: "ready",
     models: {
       available: [],
-      selected: { effort: "medium", fastMode: false, model: "gpt-5.5" },
+      selected: { ...DEFAULT_FINANCE_MODEL_SELECTION },
     },
     provider: { status: "ready", version: "test" },
     session: { conversationId: null, id: "session_1", status: "closed" },

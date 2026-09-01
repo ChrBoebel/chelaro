@@ -230,7 +230,7 @@ def migrate_v2_to_v3(connection: Connection) -> None:
 # configuration resolved to. That value is not recoverable, so existing
 # bindings adopt the current Chelaro default and are re-bound on the next
 # resume, exactly like the PostgreSQL migration does.
-BACKFILL_MODEL = "gpt-5.5"
+BACKFILL_MODEL = "gpt-5.6-luna"
 BACKFILL_EFFORT = "medium"
 BACKFILL_SERVICE_TIER = "default"
 
