@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   inspectCodexProvider,
+  providerSnapshot,
   SUPPORTED_CODEX_VERSION,
 } from "../src/codex-provider.js";
 
@@ -37,10 +38,7 @@ test("codex provider: discovers the user CLI and reuses its normal credential ho
       home: state.home,
       path: state.path,
     });
-    assert.deepEqual(provider.snapshot, {
-      status: "ready",
-      version: SUPPORTED_CODEX_VERSION,
-    });
+    assert.deepEqual(provider.snapshot, providerSnapshot("ready", SUPPORTED_CODEX_VERSION));
     assert(provider.launch);
     assert.equal(provider.launch.binaryPath, realpathSync(state.executable));
     assert.equal(provider.launch.home, state.home);
@@ -60,7 +58,7 @@ test("codex provider: reports missing and unsupported installations without cras
       path: join(missing.home, "empty-bin"),
     }), {
       launch: null,
-      snapshot: { status: "not_found", version: null },
+      snapshot: providerSnapshot("not_found", null),
     });
   } finally {
     missing.cleanup();
@@ -75,7 +73,7 @@ test("codex provider: reports missing and unsupported installations without cras
       path: unsupported.path,
     }), {
       launch: null,
-      snapshot: { status: "unsupported", version: "0.150.0" },
+      snapshot: providerSnapshot("unsupported", "0.150.0"),
     });
   } finally {
     unsupported.cleanup();

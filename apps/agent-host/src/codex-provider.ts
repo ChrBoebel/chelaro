@@ -2,12 +2,21 @@ import { execFileSync } from "node:child_process";
 import { accessSync, constants, realpathSync, statSync } from "node:fs";
 import { isAbsolute, delimiter, join } from "node:path";
 
-export const SUPPORTED_CODEX_VERSION = "0.151.0";
+export const SUPPORTED_CODEX_VERSION = "0.152.0";
+
+/**
+ * Every Codex CLI release the finance host accepts, newest first. The runtime
+ * carries the list so the user-facing message names the versions the running
+ * build actually verified instead of repeating a literal that drifts on the
+ * next upgrade.
+ */
+export const SUPPORTED_CODEX_VERSIONS: readonly string[] = Object.freeze([SUPPORTED_CODEX_VERSION]);
 
 export type CodexProviderStatus = "checking" | "ready" | "not_found" | "unsupported" | "error";
 
 export interface CodexProviderSnapshot {
   status: CodexProviderStatus;
+  supportedVersions: readonly string[];
   version: string | null;
 }
 
@@ -37,7 +46,7 @@ export function inspectCodexProvider(options: CodexProviderOptions): CodexProvid
   const searchPath = validSearchPath(options.path ?? "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin");
   const binaryName = validBinaryName(options.binaryPath ?? "codex");
   const binaryPath = resolveExecutable(binaryName, searchPath);
-  if (!binaryPath) return { launch: null, snapshot: { status: "not_found", version: null } };
+  if (!binaryPath) return { launch: null, snapshot: providerSnapshot("not_found", null) };
 
   let rawVersion: string;
   try {
@@ -52,18 +61,25 @@ export function inspectCodexProvider(options: CodexProviderOptions): CodexProvid
       timeout: 5_000,
     }).trim();
   } catch {
-    return { launch: null, snapshot: { status: "error", version: null } };
+    return { launch: null, snapshot: providerSnapshot("error", null) };
   }
   const match = /^codex-cli ([0-9]+\.[0-9]+\.[0-9]+)$/.exec(rawVersion);
-  if (!match) return { launch: null, snapshot: { status: "error", version: null } };
+  if (!match) return { launch: null, snapshot: providerSnapshot("error", null) };
   const version = match[1]!;
   if (version !== SUPPORTED_CODEX_VERSION) {
-    return { launch: null, snapshot: { status: "unsupported", version } };
+    return { launch: null, snapshot: providerSnapshot("unsupported", version) };
   }
   return {
     launch: { binaryPath, codexHome, home, path: searchPath, version },
-    snapshot: { status: "ready", version },
+    snapshot: providerSnapshot("ready", version),
   };
+}
+
+export function providerSnapshot(
+  status: CodexProviderStatus,
+  version: string | null,
+): CodexProviderSnapshot {
+  return { status, supportedVersions: SUPPORTED_CODEX_VERSIONS, version };
 }
 
 function resolveExecutable(binaryPath: string, searchPath: string): string | null {

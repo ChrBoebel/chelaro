@@ -11,6 +11,26 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.5.1] - 2026-09-01
+
+### Changed
+
+- Chelaro now runs on Codex CLI `0.152.0`. The generated App Server schemas, the compatibility
+  constant, the package pin, and the real App Server tests moved together, as ADR 0011 requires.
+  Every protocol type Chelaro validates is unchanged between `0.151.0` and `0.152.0`; the release
+  adds `modelProvider/authRecovery*` notifications, an `openaiForm` elicitation mode, a
+  `thread/shellCommand` timeout, and two account and project fields, none of which Chelaro reads,
+  sends, or accepts.
+
+### Fixed
+
+- The message for an unsupported Codex installation names the version the running build actually
+  requires instead of a literal in the interface, which would have kept naming `0.151.0` after this
+  upgrade. It now also states that consent and stored conversations survive, and shows the exact
+  install command.
+- A Codex CLI that cannot be started is no longer described with the login text meant for a working
+  installation.
+
 ## [0.5.0] - 2026-09-01
 
 ### Added

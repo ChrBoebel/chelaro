@@ -16,7 +16,7 @@ const baseSnapshot = {
     ],
     selected: { effort: "medium", fastMode: false, model: "gpt-5.6-luna" },
   },
-  provider: { status: "ready", version: "0.151.0" },
+  provider: { status: "ready", supportedVersions: ["0.152.0"], version: "0.152.0" },
   session: null,
   turn: null,
   usage: null,
@@ -110,12 +110,26 @@ describe("FinanceAssistant", () => {
       ...baseSnapshot,
       appServer: "stopped",
       consent: { status: "granted", version: "2026-08-31.v2" },
-      provider: { status: "not_found", version: null },
+      provider: { status: "not_found", supportedVersions: ["0.152.0"], version: null },
     };
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ snapshot: unavailable })));
     render(<FinanceAssistant />);
     expect(await screen.findByRole("heading", { name: "Codex wurde nicht gefunden" })).toBeDefined();
     expect(screen.getByText(/übrigen Finanzfunktionen bleiben nutzbar/)).toBeDefined();
+  });
+
+  it("names the supported Codex version the host reports instead of a literal", async () => {
+    const unsupported = {
+      ...baseSnapshot,
+      appServer: "stopped",
+      consent: { status: "granted", version: "2026-08-31.v2" },
+      provider: { status: "unsupported", supportedVersions: ["9.9.9"], version: "0.1.0" },
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ snapshot: unsupported })));
+    render(<FinanceAssistant />);
+    expect(await screen.findByRole("heading", { name: "Codex-Version wird nicht unterstützt" })).toBeDefined();
+    expect(screen.getByText(/Installiert ist 0\.1\.0; Chelaro benötigt die geprüfte Codex CLI 9\.9\.9\./)).toBeDefined();
+    expect(screen.getByText("npm install -g @openai/codex@9.9.9")).toBeDefined();
   });
 
   it("streams bound plain-text finance answers and keeps mutations review-only", async () => {

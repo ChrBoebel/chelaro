@@ -12,6 +12,7 @@ import {
   type FinanceAgentEvent,
   type FinanceAgentServiceOptions,
 } from "../src/finance-agent-service.js";
+import { providerSnapshot, SUPPORTED_CODEX_VERSION } from "../src/codex-provider.js";
 import { FinanceConsentJournal } from "../src/consent-journal.js";
 import type { FinanceToolApi } from "../src/finance-tool-dispatcher.js";
 import {
@@ -490,7 +491,7 @@ test("finance agent service: durable revocation interrupts, closes, and stops be
       available: [],
       selected: { ...DEFAULT_FINANCE_MODEL_SELECTION },
     },
-    provider: { status: "ready", version: "test" },
+    provider: providerSnapshot("ready", "test"),
     session: { conversationId: null, id: "session_1", status: "closed" },
     turn: { id: "turn_1", status: "interrupted" },
     usage: null,
@@ -583,7 +584,7 @@ function safeThread(runtimeDirectory: string): Record<string, unknown> {
     thread: {
       agentNickname: null,
       agentRole: null,
-      cliVersion: "0.151.0",
+      cliVersion: SUPPORTED_CODEX_VERSION,
       createdAt: 1,
       cwd: runtimeDirectory,
       ephemeral: false,

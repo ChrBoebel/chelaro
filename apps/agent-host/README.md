@@ -40,7 +40,7 @@ pnpm check:codex-schema
 pnpm test:agent-host
 ```
 
-Für die Nutzung muss die unterstützte Codex CLI `0.151.0` installiert sein. Eine vorhandene
+Für die Nutzung muss die unterstützte Codex CLI `0.152.0` installiert sein. Eine vorhandene
 `codex login`-Anmeldung wird über den App Server wiederverwendet; Chelaro besitzt keinen eigenen
 Login oder Logout und liest keine `auth.json`. Die realen App-Server-Tests laufen über
 `pnpm quality:agent:macos`.
