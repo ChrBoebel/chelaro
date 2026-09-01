@@ -39,6 +39,21 @@ export const FINANCE_CONSENT_DATA_CATEGORIES = Object.freeze([
   "reviewable_change_proposals",
 ] as const);
 
+const LEGACY_FINANCE_CONSENT_DATA_CATEGORIES = Object.freeze([
+  "chat_messages",
+  "financial_overview",
+  "transactions",
+  "receivables_and_payment_status",
+  "reviewable_change_proposals",
+] as const);
+
+const LEGACY_FINANCE_CONSENT_CONTRACTS = Object.freeze({
+  "2026-08-28.v1": Object.freeze({
+    categories: LEGACY_FINANCE_CONSENT_DATA_CATEGORIES,
+    noticeHash: "0157249b491057ec118c84158b528996871d34f6616d78cc98e0bd58c4e1d48e",
+  }),
+});
+
 export const MAX_CONSENT_JOURNAL_BYTES = 256 * 1024;
 export const MAX_CONSENT_JOURNAL_RECORDS = 1024;
 const MAX_CONSENT_RECORD_BYTES = 4096;
@@ -135,9 +150,14 @@ export class FinanceConsentJournal implements FinanceConsentAuthority {
   }
 
   grant(): FinanceConsentSnapshot {
-    const records = this.#readRecords() ?? [];
-    const latest = records.at(-1);
-    if (latest && latest.action !== "revoke_complete") {
+    let records = this.#readRecords() ?? [];
+    let latest = records.at(-1);
+    if (latest?.action === "revoke_pending" && isLegacyConsent(latest)) {
+      const completed = this.#append(records, "revoke_complete", latest.consentVersion);
+      records = [...records, completed];
+      latest = completed;
+    }
+    if (latest && latest.action !== "revoke_complete" && !canUpgradeConsent(latest)) {
       throw new FinanceConsentJournalError("invalid_state");
     }
     return snapshotFor(this.#append(records, "grant"));
@@ -163,7 +183,11 @@ export class FinanceConsentJournal implements FinanceConsentAuthority {
     return snapshotFor(this.#append(records, "revoke_complete"));
   }
 
-  #append(records: ConsentRecord[], action: ConsentAction): ConsentRecord {
+  #append(
+    records: ConsentRecord[],
+    action: ConsentAction,
+    consentVersion = FINANCE_CONSENT_VERSION,
+  ): ConsentRecord {
     ensureSecureDirectory(dirname(this.#journalPath));
     const flags = constants.O_RDWR | constants.O_APPEND | constants.O_CREAT | noFollowFlag();
     let descriptor: number | undefined;
@@ -175,12 +199,14 @@ export class FinanceConsentJournal implements FinanceConsentAuthority {
       if (!sameRecordChain(records, current)) {
         throw new JournalValidationError("invalid_journal");
       }
+      const contract = consentContract(consentVersion);
+      if (!contract) throw new JournalValidationError("unsupported_version");
       const previous = current.at(-1);
       const core: ConsentRecordCore = {
         action,
-        categories: [...FINANCE_CONSENT_DATA_CATEGORIES],
-        consentVersion: FINANCE_CONSENT_VERSION,
-        noticeHash: FINANCE_CONSENT_NOTICE_HASH,
+        categories: [...contract.categories],
+        consentVersion,
+        noticeHash: contract.noticeHash,
         occurredAt: this.#now().toISOString(),
         previousHash: previous?.recordHash ?? null,
         provider: FINANCE_CONSENT_PROVIDER,
@@ -289,13 +315,14 @@ function validateRecord(record: ConsentRecord, previous: ConsentRecord | undefin
   if (record.schemaVersion !== FINANCE_CONSENT_SCHEMA_VERSION) {
     throw new JournalValidationError("unsupported_version");
   }
-  if (record.consentVersion !== FINANCE_CONSENT_VERSION) {
+  const contract = consentContract(record.consentVersion);
+  if (!contract) {
     throw new JournalValidationError("unsupported_version");
   }
   if (
     record.provider !== FINANCE_CONSENT_PROVIDER ||
-    record.noticeHash !== FINANCE_CONSENT_NOTICE_HASH ||
-    !equalStrings(record.categories, FINANCE_CONSENT_DATA_CATEGORIES) ||
+    record.noticeHash !== contract.noticeHash ||
+    !equalStrings(record.categories, contract.categories) ||
     record.sequence !== (previous?.sequence ?? 0) + 1 ||
     record.previousHash !== (previous?.recordHash ?? null) ||
     record.recordHash !== hashRecordCore(record) ||
@@ -303,8 +330,17 @@ function validateRecord(record: ConsentRecord, previous: ConsentRecord | undefin
   ) {
     throw new JournalValidationError("invalid_journal");
   }
+  const isUpgrade = previous !== undefined &&
+    canUpgradeConsent(previous) &&
+    record.consentVersion === FINANCE_CONSENT_VERSION &&
+    record.action === "grant";
+  if (previous && previous.consentVersion !== record.consentVersion && !isUpgrade) {
+    throw new JournalValidationError("invalid_journal");
+  }
   const expectedAction: ConsentAction[] = previous
-    ? previous.action === "grant"
+    ? isUpgrade
+      ? ["grant"]
+      : previous.action === "grant"
       ? ["revoke_pending"]
       : previous.action === "revoke_pending"
         ? ["revoke_complete"]
@@ -357,6 +393,14 @@ function hashRecordCore(record: ConsentRecordCore): string {
 }
 
 function snapshotFor(record: ConsentRecord): FinanceConsentSnapshot {
+  if (record.consentVersion !== FINANCE_CONSENT_VERSION) {
+    return {
+      denialReason: "unsupported_version",
+      sequence: record.sequence,
+      status: "revoked",
+      version: record.consentVersion,
+    };
+  }
   return {
     denialReason: record.action === "grant" ? null : "not_granted",
     sequence: record.sequence,
@@ -367,6 +411,32 @@ function snapshotFor(record: ConsentRecord): FinanceConsentSnapshot {
         : "revoked",
     version: record.consentVersion,
   };
+}
+
+function canUpgradeConsent(record: ConsentRecord): boolean {
+  return (
+    isLegacyConsent(record) &&
+    ["grant", "revoke_complete"].includes(record.action)
+  );
+}
+
+function isLegacyConsent(record: ConsentRecord): boolean {
+  return Object.hasOwn(LEGACY_FINANCE_CONSENT_CONTRACTS, record.consentVersion);
+}
+
+function consentContract(consentVersion: string): {
+  categories: readonly string[];
+  noticeHash: string;
+} | undefined {
+  if (consentVersion === FINANCE_CONSENT_VERSION) {
+    return {
+      categories: FINANCE_CONSENT_DATA_CATEGORIES,
+      noticeHash: FINANCE_CONSENT_NOTICE_HASH,
+    };
+  }
+  return LEGACY_FINANCE_CONSENT_CONTRACTS[
+    consentVersion as keyof typeof LEGACY_FINANCE_CONSENT_CONTRACTS
+  ];
 }
 
 function readBounded(descriptor: number, stats: Stats): string {
