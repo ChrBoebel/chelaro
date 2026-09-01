@@ -31,20 +31,28 @@ and as the `priority` service tier that Codex itself labels "Fast — 1.5x speed
 - Offer only models whose provider-edge manifest was verified. `FINANCE_SUPPORTED_MODELS` is
   intersected with the live `model/list` catalog, and `finance-provider-manifest.test.ts` runs once
   per allowlisted model.
-- Exclude the GPT-5.6 family, `gpt-5.6-luna` included. Beyond the Code Mode `exec` router that
-  ADR 0012 permits, `gpt-5.6-sol` and `gpt-5.6-terra` declare `collaboration`, `spawn_agent`,
-  `send_message`, `followup_task`, `interrupt_agent`, `list_agents`, and `wait_agent` at the
-  provider edge. The pinned App Server offers no way to remove them: `features.collaboration =
-  false` is rejected under `--strict-config`, and `features.code_mode_host = false` changes
-  nothing. ADR 0010's stop condition applies. `gpt-5.6-luna` is milder — it declares only `exec`,
-  `functions`, and `wait` — but `wait` is an agent-orchestration primitive that is neither one of
-  the eight finance functions nor part of the router ADR 0012 sanctioned, and it buys the finance
-  assistant nothing that `gpt-5.5` does not already do. Admitting it would mean weakening ADR 0010's
-  provider-edge rule for no product gain, so it stays out until the pinned App Server can remove
-  the tool. The first release therefore ships `gpt-5.5`, `gpt-5.4`, and `gpt-5.4-mini`, which expose
-  exactly the eight finance functions.
-- Default new conversations to `gpt-5.5` at `medium` effort with Fast Mode off. Fast Mode increases
-  usage, so it is opted into rather than inherited.
+- Offer the newest model whose provider edge holds, and offer it first. `FINANCE_SUPPORTED_MODELS`
+  is ordered newest first, the catalog is sorted into that order rather than Codex's, and new
+  conversations default to the first entry. A model Codex starts shipping still never appears until
+  its provider-edge manifest run is green.
+- Admit `gpt-5.6-luna`. Its provider edge is the `functions` namespace with `exec` and `wait` and
+  nothing else, and the `exec` router declares exactly the eight finance functions inside its
+  isolate — no Node, shell, file system, or network. `wait` is not a capability: it resumes a
+  yielded `exec` cell and does nothing without one. That is precisely the single indirection
+  ADR 0012 sanctions, so ADR 0010's stop condition is satisfied. Measured against the pinned App
+  Server, a real turn on `gpt-5.6-luna` reaches the host as ordinary `dynamicToolCall` items for
+  `finance_*` with `namespace: null`, and the thread echo carries the same key set and
+  `multiAgentMode: explicitRequestOnly` as the direct-calling models.
+- Exclude `gpt-5.6-sol` and `gpt-5.6-terra`. Beyond that router they declare a `collaboration`
+  namespace with `spawn_agent`, `send_message`, `followup_task`, `interrupt_agent`, `list_agents`,
+  and `wait_agent`. The pinned App Server offers no way to remove them: `features.collaboration =
+  false` is rejected under `--strict-config`, `features.code_mode_host = false` changes nothing, and
+  `[agents] enabled = false` does not clear the namespace either. `multiAgentMode` shapes
+  instructions, not the tool surface, and instructions are not a boundary. ADR 0010's stop condition
+  applies. The first release therefore ships `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, and
+  `gpt-5.4-mini`.
+- Default new conversations to the newest allowlisted model at `medium` effort with Fast Mode off.
+  Fast Mode increases usage, so it is opted into rather than inherited.
 - Expose model, effort, and Fast Mode in the assistant UI. Effort options and the Fast Mode switch
   come from the catalog entry of the selected model, so a model without service tiers shows no
   switch.
@@ -64,15 +72,24 @@ and as the `priority` service tier that Codex itself labels "Fast — 1.5x speed
 The assistant's model, depth, and speed are Chelaro decisions, visible in the product, recorded per
 conversation, and re-verified on every thread. Changing `~/.codex/config.toml` no longer affects it.
 
-Existing conversations predate explicit selection; the migration backfills them with the new default
-and they are re-bound on the next resume. Owners on the machine tested above will notice a change
+Existing conversations predate explicit selection; the migration backfills them with the current
+default, so a reopened conversation continues on the same model a new one would use, and they are
+re-bound on the next resume. Owners on the machine tested above will notice a change
 from GPT-5.6-Sol at high effort on the priority tier to GPT-5.5 at medium effort on the standard
 tier — a deliberate consequence of removing the inherited configuration and of the provider-edge
 finding.
 
-Adding a model requires a green provider-edge manifest run for that model. Admitting any member of
-the GPT-5.6 family requires either an App Server that can restrict its tool manifest or a new ADR
-that amends ADR 0010's provider-edge rule.
+Adding a model requires a green provider-edge manifest run for that model. The run is a real
+negative control: adding `gpt-5.6-sol` to the allowlist fails it with
+`namespace:collaboration`, so the gate is known to bite rather than assumed to.
+
+Admitting `gpt-5.6-sol` or `gpt-5.6-terra` requires either an App Server that can restrict their
+tool manifest or a new ADR that amends ADR 0010's provider-edge rule.
+
+The catalog offers `xhigh` on every allowlisted model and `max` on `gpt-5.6-luna`. Chelaro currently
+stops at `high`, so those depths stay unavailable. Raising the ceiling is a database change — the
+`provider_effort` check constraint enumerates the accepted values — and is deliberately left for a
+separate decision.
 
 Consent is unchanged. The provider, the transferred data categories, and the notice all stay the
 same, so no new consent version is required.

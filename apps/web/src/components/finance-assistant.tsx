@@ -95,10 +95,12 @@ export function FinanceAssistant() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyStatus, setHistoryStatus] = useState<"active" | "archived">("active");
   const [nextBeforeSequence, setNextBeforeSequence] = useState<number | null>(null);
+  // Replaced by the host's verified default as soon as the first snapshot
+  // arrives; this only avoids an empty picker on the very first render.
   const [draftSelection, setDraftSelection] = useState<ModelSelection>({
     effort: "medium",
     fastMode: false,
-    model: "gpt-5.5",
+    model: "gpt-5.6-luna",
   });
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
   const snapshotRef = useRef<FinanceAssistantSnapshot | null>(null);

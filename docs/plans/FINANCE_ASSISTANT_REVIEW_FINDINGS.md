@@ -64,6 +64,30 @@ Kein Handlungsbedarf. Hier festgehalten, damit eine spätere Regression auffäll
 
 ---
 
+### B3 — Der echte `thread/resume` wurde nie akzeptiert (im Browser gefunden)
+
+- **Schwere:** hoch. Vorbestehend seit ADR 0013, verdeckt durch B1.
+- **Symptom:** Nach der B1-Behebung schlug „Unterhaltung fortsetzen" gegen das echte Codex weiter
+  fehl, jetzt mit „Codex meldet eine Konfiguration, die Chelaro nicht zulässt."
+- **Ursache:** `assertSafeFinanceThreadResponse` prüfte für Start und Resume denselben exakten
+  Schlüsselsatz und verlangte `runtimeWorkspaceRoots: []`. Gemessen am gepinnten App Server trägt
+  eine Resume-Antwort drei zusätzliche Felder (`initialTurnsPage`, `turnsBackwardsCursor`,
+  `itemsBackwardsCursor`) und nennt das Verzeichnis, in dem der Thread gestartet wurde. Jeder echte
+  Resume fiel damit durch.
+- **Warum es niemand sah:** B1 brach schon vorher ab, und beide Test-Doubles (Service-Stub und
+  E2E-Fake-Host) beantworteten `thread/resume` mit der Start-Form. Die Tests waren grün, weil sie
+  eine Antwort prüften, die es so nie gab.
+- [x] **Behoben.** Der Vertrag ist jetzt pro Operation exakt: Resume erlaubt genau die drei
+      zusätzlichen Felder, `initialTurnsPage` muss `null` bleiben (Chelaros Datenbank ist die
+      Wahrheitsquelle, ADR 0013), Cursor sind längenbegrenzt, und beim Resume darf jeder
+      Workspace-Root ausschließlich auf das Runtime-Verzeichnis zeigen — beim Start bleibt `[]`
+      gefordert. Beide Fakes antworten jetzt wie der echte Server.
+      Nachweis: `finance-response-validator.test.ts` („accepts a resumed thread without provider
+      history"), inklusive Negativfällen für hydrierte Historie, fremden Workspace-Root und
+      vertauschte Formen.
+
+---
+
 ## C. Interface-Analyse
 
 ### C1 — Vorschlags-Chips sehen klickbar aus, sind es nicht
@@ -174,19 +198,50 @@ gegenüber unserer statischen, testgedeckten Allowlist. **Nicht umgesetzt, bleib
 
 ### E1 — GPT-5.6-Familie
 
-- **Befund (gemessen am Provider-Rand):**
+- **Befund (gemessen am Provider-Rand, gepinnte CLI `0.151.0`):**
 
   | Modell | Provider-Rand |
   | --- | --- |
-  | `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini` | exakt die acht Finanzfunktionen |
-  | `gpt-5.6-luna` | Code Mode: `exec`, `functions`, `wait` |
-  | `gpt-5.6-sol`, `gpt-5.6-terra` | Code Mode **plus** `collaboration`, `spawn_agent`, `send_message`, `followup_task`, `interrupt_agent`, `list_agents`, `wait_agent` |
+  | `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini` | exakt die acht Finanzfunktionen als direkte Aufrufe |
+  | `gpt-5.6-luna` | Namespace `functions` mit `exec` und `wait`; im `exec`-Isolat exakt die acht Finanzfunktionen |
+  | `gpt-5.6-sol`, `gpt-5.6-terra` | dasselbe **plus** Namespace `collaboration` mit `followup_task`, `interrupt_agent`, `list_agents`, `send_message`, `spawn_agent`, `wait_agent` |
 
-- [x] **Entschieden: die ganze Familie bleibt draußen, `gpt-5.6-luna` eingeschlossen.** `wait` ist
-      ein Orchestrierungswerkzeug, weder eine der acht Finanzfunktionen noch Teil des von ADR 0012
-      erlaubten Routers. Es aufzunehmen hieße, die Stoppbedingung aus ADR 0010 aufzuweichen, ohne
-      dass der Finanzassistent dadurch etwas kann, was `gpt-5.5` nicht kann. Festgehalten in
-      ADR 0014.
+- [x] **Entschieden — und dabei eine falsche Annahme korrigiert.** Die erste Fassung dieser Datei
+      und der ADR bezeichneten `wait` als Orchestrierungswerkzeug und schlossen `gpt-5.6-luna`
+      allein deshalb aus. Das war falsch: `wait` setzt eine angehaltene `exec`-Zelle fort
+      („Waits on a yielded `exec` cell and returns new output or completion") und kann ohne
+      laufende Zelle nichts. Lunas Provider-Rand ist damit genau die eine Indirektion, die ADR 0012
+      erlaubt, und die Stoppbedingung aus ADR 0010 ist erfüllt.
+      **`gpt-5.6-luna` ist aufgenommen und ist die neue Vorgabe.** `gpt-5.6-sol` und
+      `gpt-5.6-terra` bleiben draußen; `[agents] enabled = false` räumt die
+      `collaboration`-Namespace ebenso wenig weg wie `features.collaboration = false`.
+      Nachweise: der Provider-Rand-Test läuft je Modell und prüft beide Routing-Pfade; als
+      Negativkontrolle wurde `gpt-5.6-sol` versuchsweise auf die Allowlist gesetzt und fiel mit
+      `namespace:collaboration` durch. Ein echter Turn auf Luna erreicht den Host als gewöhnliche
+      `dynamicToolCall`-Items für `finance_*` mit `namespace: null`, und der Thread-Echo trägt
+      denselben Schlüsselsatz und `multiAgentMode: explicitRequestOnly` wie die direkten Modelle —
+      am Host war also keine Änderung nötig.
+
+### E1b — Reihenfolge und Vorgabe
+
+- **Befund:** Der Katalog kam in der Reihenfolge von Codex, die Vorgabe war fest `gpt-5.5`. Damit
+  landete man auf einem älteren Modell, obwohl ein neueres zulässig gewesen wäre.
+- [x] **Umgesetzt.** `FINANCE_SUPPORTED_MODELS` ist nach Neuheit sortiert, `refreshModelCatalog`
+      bringt den Live-Katalog in diese Reihenfolge statt die von Codex zu übernehmen, und die
+      Vorgabe ist der erste Eintrag. Auch der Backfill beider Migrationen setzt die aktuelle
+      Vorgabe, damit eine wiederaufgenommene alte Unterhaltung nicht auf einem älteren Modell
+      hängen bleibt.
+      Nachweis: `finance-assistant.test.tsx` („offers the newest verified model first …").
+
+### E1c — Denktiefen jenseits von `high`
+
+- **Befund:** Der Live-Katalog bietet `xhigh` auf allen zugelassenen Modellen und zusätzlich `max`
+  auf `gpt-5.6-luna`. `FINANCE_SUPPORTED_EFFORTS` endet bei `high`, diese Tiefen sind also nicht
+  wählbar.
+- [ ] **Offen, bewusst nicht in diesem Schritt.** Die Check-Constraint `provider_effort IN
+      ('low','medium','high')` steht in beiden Datenbanken; eine Erweiterung braucht eine neue
+      Alembic-Revision und eine Desktop-Schemaversion. Fachlich unbedenklich, weil die Denktiefe
+      keinen Einfluss auf den Werkzeugrand hat und über den Echo geprüft wird.
 
 ### E2 — Verhaltensänderung kommunizieren
 
@@ -217,6 +272,13 @@ gegenüber unserer statischen, testgedeckten Allowlist. **Nicht umgesetzt, bleib
 - [x] Backfill-Pfad der Migration mit **bestehenden** Zeilen – **geprüft.** Eine vor ADR 0014
       angelegte Bindung (`provider_thread_legacy`) wurde vor der Migration eingefügt und danach
       unverändert mit `gpt-5.5 | medium | default` wiedergefunden.
+
+- [x] **Manueller Browser-Durchlauf gegen das echte Codex** — nachgeholt. Echter Stack (API,
+      Agent-Host gegen die reale CLI, Next.js), Bedienung per Klick im Chrome. Abgedeckt: Consent,
+      Modellauswahl mit Live-Katalog, Ausblenden des Fast-Mode-Schalters, gebundene Konfiguration
+      im Chat-Header, Token- und Kontextanzeige, „Konfiguration ändern", Fortsetzen mit geänderter
+      Denktiefe, Anschlussfrage aus dem wiederaufgenommenen Kontext, Abbrechen und „Erneut senden",
+      persistierte Bindung und Audit-Kette. Dabei kam B3 heraus.
 
 ### Dabei gefundener Zusatzfehler
 

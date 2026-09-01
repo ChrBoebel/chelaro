@@ -11,9 +11,16 @@ Finanzfunktionen und hat keinen Node-, Shell-, Datei- oder Netzwerkzugriff.
 Modell, Denktiefe und Service Tier werden bei jedem `thread/start` und `thread/resume` explizit
 gesendet und nie aus `~/.codex/config.toml` geerbt. Ein Thread gilt erst als konfiguriert, wenn die
 Antwort genau die angeforderten Werte zurückmeldet — der App Server nimmt unbekannte Werte
-kommentarlos an und ersetzt sie still. Angeboten werden nur Modelle aus `FINANCE_SUPPORTED_MODELS`,
-deren Provider-Rand nachweislich ausschließlich die acht Finanzfunktionen zeigt. Details in
-[ADR 0014](../../docs/decisions/0014-explicit-finance-model-selection.md).
+kommentarlos an und ersetzt sie still.
+
+Angeboten werden nur Modelle aus `FINANCE_SUPPORTED_MODELS`, deren Provider-Rand nachweislich
+ausschließlich die acht Finanzfunktionen erreicht. Die Liste ist nach Neuheit sortiert, der Katalog
+wird in diese Reihenfolge gebracht und neue Unterhaltungen starten auf dem ersten Eintrag —
+derzeit `gpt-5.6-luna` über den isolierten Code-Mode-Router, danach `gpt-5.5`, `gpt-5.4` und
+`gpt-5.4-mini` als direkte Funktionsaufrufe. `gpt-5.6-sol` und `gpt-5.6-terra` bleiben draußen: sie
+zeigen zusätzlich eine `collaboration`-Namespace mit `spawn_agent` und Verwandten, die der gepinnte
+App Server nicht abschalten kann. `finance-provider-manifest.test.ts` prüft das je Modell gegen die
+echte CLI. Details in [ADR 0014](../../docs/decisions/0014-explicit-finance-model-selection.md).
 
 ## Autoritätsmodell
 

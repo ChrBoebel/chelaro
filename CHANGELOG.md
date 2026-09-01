@@ -26,8 +26,11 @@ All notable Chelaro changes are recorded here. The format follows
 
 ### Fixed
 
-- Reopening a conversation works within one application run. Continuing a conversation previously
-  failed with a conflict until Chelaro was restarted, which contradicted ADR 0013.
+- Reopening a conversation works. It previously failed in three separate ways: with a conflict
+  until Chelaro was restarted, and — underneath that — because Chelaro checked the resumed thread
+  against the shape of a started one. A real `thread/resume` carries three additional fields and
+  reports the workspace it was started in, so every resume against real Codex was rejected as an
+  unsafe configuration. All three are fixed and covered by tests that use the real resume shape.
 - A rejected assistant action now names its reason — missing Codex login, an unavailable model, a
   running turn — instead of always suggesting a retry that could not succeed.
 - An existing local database created before the explicit model selection is migrated instead of
@@ -38,7 +41,8 @@ All notable Chelaro changes are recorded here. The format follows
 - Chelaro now sends the model, reasoning effort, and service tier explicitly on every thread start
   and resume instead of inheriting them from the owner's personal `~/.codex/config.toml`. Assistant
   conversations previously ran on whatever that file declared.
-- The default configuration is GPT-5.5 at medium effort with Fast Mode off. Fast Mode maps to the
+- The assistant offers GPT-5.6-Luna, GPT-5.5, GPT-5.4, and GPT-5.4-Mini, newest first, and new
+  conversations start on the newest one at medium effort with Fast Mode off. Fast Mode maps to the
   Codex `priority` tier, which Codex describes as 1.5x speed at increased usage.
 
 ### Security
@@ -46,9 +50,11 @@ All notable Chelaro changes are recorded here. The format follows
 - A thread is accepted only when Codex echoes back exactly the requested model, effort, and service
   tier. The App Server accepts unknown values without an error and silently substitutes them, so the
   request alone is not evidence of the running configuration.
-- The GPT-5.6 family is not offered. It declares collaboration and agent-spawning tools at the
-  provider edge that the pinned App Server cannot disable, which ADR 0010 forbids. The provider-edge
-  manifest test now runs once per offered model.
+- GPT-5.6-Sol and GPT-5.6-Terra are not offered: they declare a `collaboration` namespace with
+  `spawn_agent` and related tools at the provider edge that the pinned App Server cannot disable,
+  which ADR 0010 forbids. GPT-5.6-Luna reaches the provider with the isolated Code Mode router
+  only, whose own tool set is exactly the eight finance functions, so it is offered. The
+  provider-edge manifest test runs once per offered model and verifies both routing paths.
 - `model/rerouted` and `model/verification` notifications now abort the turn.
 - The host identifier ledger now records the role each identifier was seen in. A resumed provider
   thread may reattach; the same identifier appearing as a session or turn identifier is still

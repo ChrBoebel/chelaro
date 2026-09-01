@@ -48,20 +48,40 @@ export const FINANCE_DISABLED_CODEX_FEATURES = [
 export const FINANCE_ENABLED_CODEX_FEATURES = ["code_mode_host"] as const;
 
 /**
- * Models the finance assistant may run on. The live `model/list` catalog is
- * intersected with this list, so a model Codex starts shipping never reaches
- * the assistant before its provider-edge tool manifest was verified.
+ * Models the finance assistant may run on, newest first. The live `model/list`
+ * catalog is intersected with this list, so a model Codex starts shipping never
+ * reaches the assistant before its provider-edge tool manifest was verified,
+ * and the picker offers the newest verified model rather than whatever order
+ * Codex happens to return.
  *
- * Every model here exposes exactly the eight finance functions to the provider
- * (ADR 0010). The GPT-5.6 family is deliberately absent: it routes tool calls
- * through Code Mode and additionally declares `collaboration`, `spawn_agent`,
- * `send_message`, `followup_task`, `interrupt_agent`, `list_agents` and
- * `wait_agent` at the provider edge, which the pinned App Server does not let
- * us switch off — `features.collaboration = false` is rejected under
- * `--strict-config`, and `features.code_mode_host = false` changes nothing.
+ * Every model here reaches the provider with exactly the eight finance
+ * functions (ADR 0010) — `gpt-5.6-luna` through the isolated Code Mode router
+ * ADR 0012 sanctions, the others as direct function calls.
+ *
+ * `gpt-5.6-sol` and `gpt-5.6-terra` are deliberately absent. Beyond that router
+ * they declare a `collaboration` namespace with `spawn_agent`, `send_message`,
+ * `followup_task`, `interrupt_agent`, `list_agents`, and `wait_agent`, which
+ * the pinned App Server does not let us switch off — `features.collaboration =
+ * false` is rejected under `--strict-config`, and `features.code_mode_host =
+ * false` changes nothing. `multiAgentMode` only shapes instructions, not the
+ * tool surface, and instructions are not a boundary.
+ *
  * See `finance-provider-manifest.test.ts`, which enforces this per model.
  */
-export const FINANCE_SUPPORTED_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"] as const;
+export const FINANCE_SUPPORTED_MODELS = [
+  "gpt-5.6-luna",
+  "gpt-5.5",
+  "gpt-5.4",
+  "gpt-5.4-mini",
+] as const;
+
+/**
+ * Models whose tool calls reach the provider through the Code Mode `exec`
+ * router instead of as direct function calls. The router's `tools` object
+ * carries exactly the eight finance functions and has no Node, shell, file,
+ * or network access; `wait` is its continuation call, not a capability.
+ */
+export const FINANCE_CODE_MODE_MODELS = ["gpt-5.6-luna"] as const;
 
 export const FINANCE_SUPPORTED_EFFORTS = ["low", "medium", "high"] as const;
 
@@ -79,10 +99,11 @@ export interface FinanceModelSelection {
   model: FinanceModelId;
 }
 
+/** The newest verified model, so a new conversation starts on the best one. */
 export const DEFAULT_FINANCE_MODEL_SELECTION: FinanceModelSelection = Object.freeze({
   effort: "medium",
   fastMode: false,
-  model: "gpt-5.5",
+  model: FINANCE_SUPPORTED_MODELS[0],
 });
 
 export function financeServiceTier(fastMode: boolean): string {

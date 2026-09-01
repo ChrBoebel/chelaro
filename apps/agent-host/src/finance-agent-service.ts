@@ -41,6 +41,7 @@ import {
   buildFinanceThreadResumeParams,
   configuredMcpServerNames,
   DEFAULT_FINANCE_MODEL_SELECTION,
+  FINANCE_SUPPORTED_MODELS,
   type FinanceModelSelection,
 } from "./finance-thread-contract.js";
 import {
@@ -231,9 +232,13 @@ export class FinanceAgentService {
       cursor = decoded.nextCursor;
       if (cursor === null) break;
     }
-    this.#catalog = models;
+    // The allowlist is ordered newest first; Codex returns its own order, so
+    // the picker is sorted here instead of showing whatever arrives.
+    this.#catalog = FINANCE_SUPPORTED_MODELS.flatMap(
+      (model) => models.filter((offered) => offered.model === model),
+    );
     this.#emit({ snapshot: this.snapshot(), type: "state.changed" });
-    return models;
+    return this.#catalog;
   }
 
   #assertOfferedSelection(selection: FinanceModelSelection): void {
