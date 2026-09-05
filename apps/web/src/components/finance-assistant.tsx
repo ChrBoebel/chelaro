@@ -166,7 +166,7 @@ export function FinanceAssistant({
         });
         setMessages((current) => [
           ...current,
-          { id: key, role: "assistant", status: "streaming", text: "" },
+          { id: key, turnId: event.turnId, role: "assistant", status: "streaming", text: "" },
         ]);
         return;
       }
@@ -657,7 +657,7 @@ export function FinanceAssistant({
     setLastPrompt(prompt);
     setMessages((current) => [
       ...current,
-      { id: `user:${turnId}`, role: "user", status: "complete", text: prompt },
+      { id: `user:${turnId}`, turnId, role: "user", status: "complete", text: prompt },
     ]);
     const response = await runAction("/api/assistant/turns", {
       prompt,
@@ -789,6 +789,7 @@ export function FinanceAssistant({
         ) : null}
         {canChat && snapshot ? (
           <ChatPanel
+            key={activeConversationId ?? "new"}
             activeTurn={activeTurn}
             working={isWorking || historyLoading}
             messages={messages}

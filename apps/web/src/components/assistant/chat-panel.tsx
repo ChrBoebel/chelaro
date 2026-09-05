@@ -1,4 +1,6 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import { ProposalCard } from "@/components/assistant/proposal-card";
+import { useAssistantProposals } from "@/lib/use-assistant-proposals";
 import { AssistantMessage } from "@/components/assistant-message";
 import { BrandMark } from "@/components/brand-mark";
 import { WorkspaceIcon } from "@/components/ui/workspace-icon";
@@ -68,6 +70,11 @@ export function ChatPanel({
   const previousKeyRef = useRef(conversationKey);
   const olderAnchorRef = useRef<{ height: number; top: number } | null>(null);
   const [awayFromBottom, setAwayFromBottom] = useState(false);
+  const proposals = useAssistantProposals(conversationKey === "new" ? null : conversationKey, activeTurn);
+  const lastMessageByTurn = new Map(messages.filter((message) => message.turnId).map((message) => [message.turnId, message.id]));
+  const renderProposal = (item: (typeof proposals.items)[number]) => (
+    <ProposalCard key={item.proposal.id} item={item} onChanged={proposals.update} onRefresh={proposals.refresh} />
+  );
   const model = available.find((entry) => entry.model === selection.model);
 
   useEffect(() => {
@@ -108,7 +115,7 @@ export function ChatPanel({
     } else if (followRef.current) {
       viewport.scrollTop = viewport.scrollHeight;
     }
-  }, [messages, activeTurn, historyLoading, conversationKey]);
+  }, [messages, activeTurn, historyLoading, conversationKey, proposals.items]);
 
   function scrollToLatest() {
     const viewport = scrollRef.current;
@@ -219,6 +226,7 @@ export function ChatPanel({
                     {message.text}
                   </p>
                 )}
+                {proposals.items.filter((item) => item.turn_id && lastMessageByTurn.get(item.turn_id) === message.id).map(renderProposal)}
                 <MessageActions
                   onRetry={
                     onRetry !== undefined && index === messages.length - 1
@@ -231,6 +239,11 @@ export function ChatPanel({
             ))}
           </div>
         )}
+        <div className="assistant-proposal-remainder">
+          {proposals.items.filter((item) => !item.turn_id || !lastMessageByTurn.has(item.turn_id)).map(renderProposal)}
+          {proposals.error ? <p role="alert" className="my-3 text-xs text-danger">Vorschläge konnten nicht aktualisiert werden. <button type="button" className="underline" onClick={() => void proposals.refresh()}>Erneut prüfen</button></p> : null}
+          {proposals.hasOlder ? <button type="button" className="my-3 text-xs text-accent" onClick={proposals.loadOlder}>Ältere Vorschläge laden</button> : null}
+        </div>
         <div role="status" className="assistant-activity">
           {activeTurn ? (
             <>
@@ -416,8 +429,7 @@ export function ChatPanel({
         </form>
         <div className="assistant-composer-meta">
           <span>
-            Finanzänderungen bleiben Vorschläge, bis du sie in Chelaro prüfst
-            und freigibst.
+            Finanzänderungen bleiben Vorschläge, bis du sie hier akzeptierst.
           </span>
           <span className="hidden shrink-0 xl:inline">
             ↵ Senden · ⇧ ↵ Neue Zeile

@@ -70,6 +70,7 @@ export interface ConversationSummary {
 }
 
 export interface DisplayMessage {
+  turnId?: string;
   id: string;
   role: "assistant" | "user";
   status: "streaming" | "complete" | "failed";
@@ -209,6 +210,7 @@ export async function loadMessages(
         return null;
       return {
         id: `stored:${value.id}`,
+        turnId: typeof value.turn_id === "string" ? value.turn_id : undefined,
         role: value.role,
         status: value.status === "complete" ? "complete" : "failed",
         text: value.text,
