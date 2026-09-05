@@ -11,6 +11,17 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.6.1] - 2026-09-05
+
+### Fixed
+
+- Accept the verified Codex CLI 0.153.3 with updated App Server schemas while
+  retaining 0.152.0 and 0.151.0 through exact reviewed legacy schema deltas.
+- Validate new thread model metadata and reject unsupported structured questions
+  on item and turn notification paths before completing an answer.
+- Update isolation evidence for macOS 26.6.2 arm64, including direct write denial
+  and rejection of restrictive nested Seatbelt profiles.
+
 ## [0.6.0] - 2026-09-05
 
 ### Changed
