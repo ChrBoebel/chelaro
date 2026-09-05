@@ -11,6 +11,16 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.7.1] - 2026-09-05
+
+### Changed
+
+- Remove the redundant desktop breadcrumb bar and repetitive chat/sidebar hints.
+- Move theme switching and update access into the sidebar; enlarge the Chelaro
+  logo and wordmark while retaining compact mobile navigation.
+- Render update dialogs outside the sidebar so mobile transforms and keyboard
+  handling do not interfere with them.
+
 ## [0.7.0] - 2026-09-05
 
 ### Added
