@@ -428,9 +428,6 @@ export function ChatPanel({
           </div>
         </form>
         <div className="assistant-composer-meta">
-          <span>
-            Finanzänderungen bleiben Vorschläge, bis du sie hier akzeptierst.
-          </span>
           <span className="hidden shrink-0 xl:inline">
             ↵ Senden · ⇧ ↵ Neue Zeile
           </span>

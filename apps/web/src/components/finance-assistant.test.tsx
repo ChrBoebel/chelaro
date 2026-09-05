@@ -276,9 +276,6 @@ describe("FinanceAssistant", () => {
     expect(
       await screen.findByText("Dein Monatssaldo beträgt 1.190,40 EUR."),
     ).toBeDefined();
-    expect(
-      screen.getByText(/Finanzänderungen bleiben Vorschläge/),
-    ).toBeDefined();
     expect(screen.queryByText("another_session")).toBeNull();
   });
 

@@ -175,9 +175,6 @@ export function HistorySidebar({
           ))
         )}
       </div>
-      <p className="assistant-history-footnote">
-        Verläufe bleiben auf diesem Mac.
-      </p>
     </aside>
   );
 }
