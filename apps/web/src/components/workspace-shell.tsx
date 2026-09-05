@@ -43,6 +43,7 @@ export function WorkspaceShell() {
       ).filter((element) => element.getClientRects().length > 0);
     focusable()[0]?.focus();
     function onKeyDown(event: KeyboardEvent) {
+      if (!sidebar?.contains(document.activeElement)) return;
       if (event.key === "Escape") {
         event.preventDefault();
         setSidebarOpen(false);
@@ -94,12 +95,12 @@ export function WorkspaceShell() {
         aria-label="Arbeitsplatz"
       >
         <div className="workspace-brand">
-          <BrandMark className="size-8" />
+          <BrandMark className="size-16" />
           <div>
-            <p className="text-sm font-semibold tracking-tight text-ink">
+            <p className="text-[26px] font-semibold leading-tight tracking-[-0.04em] text-ink">
               Chelaro
             </p>
-            <p className="text-[10px] text-muted">Jede Zahl. Belegt.</p>
+            <p className="mt-1 text-[11px] text-muted">Jede Zahl. Belegt.</p>
           </div>
           <button
             className="workspace-icon-button ml-auto md:hidden"
@@ -128,9 +129,9 @@ export function WorkspaceShell() {
           hidden={view !== "assistant"}
         />
         <div className="workspace-sidebar-footer">
-          <div className="flex items-center gap-2 text-[11px] text-muted">
-            <span className="size-1.5 rounded-full bg-accent" />
-            Dein persönlicher Arbeitsbereich
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <ThemeToggle />
+            <DesktopUpdateButton />
           </div>
           <DesktopVersion />
         </div>
@@ -146,17 +147,6 @@ export function WorkspaceShell() {
           >
             <WorkspaceIcon name="panel" />
           </button>
-          <span className="text-xs text-muted">Mein Arbeitsbereich</span>
-          <span className="text-line" aria-hidden="true">
-            /
-          </span>
-          <span className="text-xs font-medium text-ink">
-            {VIEWS.find(({ id }) => id === view)?.label}
-          </span>
-          <div className="ml-auto flex items-center gap-2">
-            <DesktopUpdateButton />
-            <ThemeToggle />
-          </div>
         </header>
         {/* Keep the event stream and in-memory drafts alive across workspace navigation. */}
         {assistantOpened ? (

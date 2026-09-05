@@ -50,3 +50,17 @@ describe("workspace navigation", () => {
     expect(lifecycle.unmounted).not.toHaveBeenCalled();
   });
 });
+
+
+it("keeps mobile navigation open when a separate dialog handles Escape", () => {
+  vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
+  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+  render(<><WorkspaceShell /><button>Separater Dialog</button></>);
+  fireEvent.click(screen.getByRole("button", { name: "Seitenleiste öffnen" }));
+  screen.getByRole("button", { name: "Separater Dialog" }).focus();
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(screen.getByRole("dialog", { name: "Arbeitsplatz" })).toBeDefined();
+  screen.getByRole("button", { name: "Assistent" }).focus();
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(screen.queryByRole("dialog", { name: "Arbeitsplatz" })).toBeNull();
+});

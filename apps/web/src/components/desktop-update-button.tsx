@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
@@ -51,8 +52,9 @@ export function DesktopUpdateButton() {
         <span className="sr-only">verfügbar</span>
       </button>
 
-      {dialogOpen ? (
-        <UpdateDialog state={state} onClose={closeDialog} />
+      {dialogOpen ? createPortal(
+        <UpdateDialog state={state} onClose={closeDialog} />,
+        document.body,
       ) : null}
     </>
   );
