@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { BankConnectionSetup } from "@/components/bank-connection";
 import { BrandMark } from "@/components/brand-mark";
@@ -11,103 +11,176 @@ import { FinanceAssistant } from "@/components/finance-assistant";
 import { InvoiceWorkbook } from "@/components/invoice-workbook";
 import { PersonalDashboard } from "@/components/personal-dashboard";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { WorkspaceIcon } from "@/components/ui/workspace-icon";
 
-type WorkspaceView = "overview" | "assistant" | "banking" | "documents" | "workbook";
+type WorkspaceView =
+  "overview" | "assistant" | "banking" | "documents" | "workbook";
+const VIEWS: { id: WorkspaceView; label: string }[] = [
+  { id: "overview", label: "Übersicht" },
+  { id: "assistant", label: "Assistent" },
+  { id: "banking", label: "Bank" },
+  { id: "documents", label: "Dokumente" },
+  { id: "workbook", label: "Rechnungen" },
+];
 
 export function WorkspaceShell() {
+  const sidebarRef = useRef<HTMLElement>(null);
   const [view, setView] = useState<WorkspaceView>("overview");
+  const [assistantOpened, setAssistantOpened] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [historyContainer, setHistoryContainer] =
+    useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const sidebar = sidebarRef.current;
+    const focusable = () =>
+      Array.from(
+        sidebar?.querySelectorAll<HTMLElement>(
+          "button:not(:disabled), input, summary",
+        ) ?? [],
+      ).filter((element) => element.getClientRects().length > 0);
+    focusable()[0]?.focus();
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSidebarOpen(false);
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (event.shiftKey && document.activeElement === items[0]) {
+        event.preventDefault();
+        items.at(-1)?.focus();
+      } else if (!event.shiftKey && document.activeElement === items.at(-1)) {
+        event.preventDefault();
+        items[0]?.focus();
+      }
+    }
+    const desktop = window.matchMedia("(min-width: 768px)");
+    const onResize = () => {
+      if (desktop.matches) setSidebarOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    desktop.addEventListener("change", onResize);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      desktop.removeEventListener("change", onResize);
+      previous?.focus();
+    };
+  }, [sidebarOpen]);
+
+  function navigate(next: WorkspaceView) {
+    setView(next);
+    if (next === "assistant") setAssistantOpened(true);
+    setSidebarOpen(false);
+  }
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto min-h-screen w-full max-w-[1540px] px-4 pb-10 sm:px-7 lg:px-10">
-        <header className="flex min-h-[72px] flex-wrap items-center justify-between gap-3 border-b border-line py-3">
-          <div className="flex items-center gap-3">
-            <BrandMark className="size-9" />
-            <div>
-              <p className="text-sm font-semibold tracking-[-0.02em] text-ink">
-                Chelaro
-              </p>
-              <p className="text-[11px] text-muted">Jede Zahl. Belegt.</p>
-            </div>
+    <main className="workspace" data-sidebar-open={sidebarOpen}>
+      {sidebarOpen ? (
+        <button
+          className="workspace-backdrop"
+          aria-label="Seitenleiste schließen"
+          onClick={() => setSidebarOpen(false)}
+        />
+      ) : null}
+      <aside
+        ref={sidebarRef}
+        role={sidebarOpen ? "dialog" : undefined}
+        aria-modal={sidebarOpen || undefined}
+        className="workspace-sidebar"
+        id="workspace-sidebar"
+        aria-label="Arbeitsplatz"
+      >
+        <div className="workspace-brand">
+          <BrandMark className="size-8" />
+          <div>
+            <p className="text-sm font-semibold tracking-tight text-ink">
+              Chelaro
+            </p>
+            <p className="text-[10px] text-muted">Jede Zahl. Belegt.</p>
           </div>
-
-          <nav
-            aria-label="Arbeitsbereiche"
-            className="order-3 flex w-full items-center gap-1 overflow-x-auto rounded-xl bg-surface p-1 sm:order-none sm:w-auto"
+          <button
+            className="workspace-icon-button ml-auto md:hidden"
+            aria-label="Seitenleiste schließen"
+            onClick={() => setSidebarOpen(false)}
           >
-            <NavigationButton
-              active={view === "overview"}
-              onClick={() => setView("overview")}
+            <WorkspaceIcon name="panel" />
+          </button>
+        </div>
+        <nav aria-label="Arbeitsbereiche" className="workspace-nav">
+          {VIEWS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              aria-current={view === id ? "page" : undefined}
+              onClick={() => navigate(id)}
             >
-              Übersicht
-            </NavigationButton>
-            <NavigationButton
-              active={view === "assistant"}
-              onClick={() => setView("assistant")}
-            >
-              Assistent
-            </NavigationButton>
-            <NavigationButton
-              active={view === "banking"}
-              onClick={() => setView("banking")}
-            >
-              Bank
-            </NavigationButton>
-            <NavigationButton
-              active={view === "documents"}
-              onClick={() => setView("documents")}
-            >
-              Dokumente
-            </NavigationButton>
-            <NavigationButton
-              active={view === "workbook"}
-              onClick={() => setView("workbook")}
-            >
-              Rechnungen
-            </NavigationButton>
-          </nav>
-
-          <div className="flex items-center gap-2">
+              <WorkspaceIcon name={id} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+        <div
+          ref={setHistoryContainer}
+          className="workspace-history"
+          hidden={view !== "assistant"}
+        />
+        <div className="workspace-sidebar-footer">
+          <div className="flex items-center gap-2 text-[11px] text-muted">
+            <span className="size-1.5 rounded-full bg-accent" />
+            Dein persönlicher Arbeitsbereich
+          </div>
+          <DesktopVersion />
+        </div>
+      </aside>
+      <div className="workspace-body" inert={sidebarOpen}>
+        <header className="workspace-toolbar">
+          <button
+            className="workspace-icon-button md:hidden"
+            aria-controls="workspace-sidebar"
+            aria-expanded={sidebarOpen}
+            aria-label="Seitenleiste öffnen"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <WorkspaceIcon name="panel" />
+          </button>
+          <span className="text-xs text-muted">Mein Arbeitsbereich</span>
+          <span className="text-line" aria-hidden="true">
+            /
+          </span>
+          <span className="text-xs font-medium text-ink">
+            {VIEWS.find(({ id }) => id === view)?.label}
+          </span>
+          <div className="ml-auto flex items-center gap-2">
             <DesktopUpdateButton />
             <ThemeToggle />
           </div>
         </header>
-
-        {view === "overview" ? (
-          <PersonalDashboard />
-        ) : view === "assistant" ? (
-          <FinanceAssistant />
-        ) : view === "banking" ? (
-          <BankConnectionSetup />
-        ) : view === "documents" ? (
-          <DocumentInbox />
-        ) : (
-          <InvoiceWorkbook />
-        )}
-
-        <DesktopVersion />
+        {/* Keep the event stream and in-memory drafts alive across workspace navigation. */}
+        {assistantOpened ? (
+          <div className="workspace-assistant" hidden={view !== "assistant"}>
+            <FinanceAssistant
+              historyContainer={historyContainer}
+              onConversationSelect={() => setSidebarOpen(false)}
+            />
+          </div>
+        ) : null}
+        {view !== "assistant" ? (
+          <div className="workspace-page">
+            {view === "overview" ? (
+              <PersonalDashboard />
+            ) : view === "banking" ? (
+              <BankConnectionSetup />
+            ) : view === "documents" ? (
+              <DocumentInbox />
+            ) : (
+              <InvoiceWorkbook />
+            )}
+          </div>
+        ) : null}
       </div>
     </main>
-  );
-}
-
-function NavigationButton({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-current={active ? "page" : undefined}
-      className="min-h-11 shrink-0 rounded-lg px-4 text-xs font-semibold transition-[background-color,color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring aria-[current=page]:bg-paper aria-[current=page]:text-ink aria-[current=page]:shadow-control not-aria-[current=page]:text-muted hover:text-ink"
-      onClick={onClick}
-    >
-      {children}
-    </button>
   );
 }
