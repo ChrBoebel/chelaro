@@ -1,0 +1,24 @@
+{
+  "legacyVersions": [
+    "0.152.0",
+    "0.151.0"
+  ],
+  "surfaces": {
+    "schema/v2/ThreadResumeResponse.json": {
+      "current": "a553d6b1eb66111ca556e22138017ec54fd07c3257dbd2d5ad97ad7660786345",
+      "legacy": "fa71d02c807e7b8b83bf7206f9f4f4e25cabf47d9aa210a44a9eb405295b2c91"
+    },
+    "schema/v2/ThreadStartResponse.json": {
+      "current": "656f8fd0fe91f533126cbfdb9369cfab550927a229e48dd46460f6f015d2b186",
+      "legacy": "c8fb6bcd1e4fb5ead6b487f0f35a90d8f13c9272edd4285914012dda403a77d2"
+    },
+    "schema/v2/TurnStartResponse.json": {
+      "current": "6fc49c3e5d0ce11a3a109ae194619b04d6e3ff98fa29bac683fdb754608958be",
+      "legacy": "7a817a98d78ac8e982c82c24bf8f7a2d2e61cca9fb91e5386e31cae0888e38e2"
+    },
+    "ts/v2/ThreadItem.ts": {
+      "current": "ee25d621ee645f49a88e494effcdf625d88cc229edbb184827d8cf4c135ff6f4",
+      "legacy": "58111efe7144ae12e25f468efe097e1d0edc33da9789f32011622c348dce66b1"
+    }
+  }
+}

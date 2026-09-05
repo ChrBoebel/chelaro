@@ -99,6 +99,10 @@ export function assertSafeFinanceThreadResponse(
     // error and silently reports a different or null value, so the requested
     // configuration only counts once the thread echoes it back unchanged.
     response.model !== selection.model ||
+    // Newer releases also report thread metadata. Older releases omit it;
+    // present values may never contradict the verified response configuration.
+    (response.thread.model != null && response.thread.model !== selection.model) ||
+    (response.thread.reasoningEffort != null && response.thread.reasoningEffort !== selection.effort) ||
     response.reasoningEffort !== selection.effort ||
     response.serviceTier !== financeServiceTier(selection.fastMode) ||
     realpathSync(response.cwd) !== runtimeRoot ||

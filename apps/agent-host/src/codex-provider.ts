@@ -7,7 +7,7 @@ import { isAbsolute, delimiter, join } from "node:path";
  * `generated/codex` were produced from. Every response Chelaro validates and
  * every request it sends is shaped against this one release.
  */
-export const SCHEMA_CODEX_VERSION = "0.152.0";
+export { CODEX_PROTOCOL_VERSION as SCHEMA_CODEX_VERSION } from "./protocol-baseline.js";
 
 /**
  * Every Codex CLI release the finance host accepts, newest first. The runtime
@@ -17,7 +17,8 @@ export const SCHEMA_CODEX_VERSION = "0.152.0";
  *
  * A release only enters this list once `pnpm check:codex-compat --binary <path>`
  * has proven, against that release's own binary, that everything Chelaro
- * sends, validates, or answers is byte-identical to `SCHEMA_CODEX_VERSION`,
+ * sends, validates, or answers matches `SCHEMA_CODEX_VERSION` (byte-identical
+ * or an exact reviewed additive legacy delta recorded by ADR 0016),
  * and that the release sends no server notification or request Chelaro has not
  * reviewed. The provider-edge manifest test (ADR 0010) must pass against the
  * same binary. This is a set of verified releases, not a tolerated range:
@@ -25,6 +26,7 @@ export const SCHEMA_CODEX_VERSION = "0.152.0";
  * fail closed underneath regardless.
  */
 export const SUPPORTED_CODEX_VERSIONS: readonly string[] = Object.freeze([
+  "0.153.3",
   "0.152.0",
   "0.151.0",
 ]);
