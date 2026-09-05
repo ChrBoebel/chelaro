@@ -11,6 +11,22 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.7.0] - 2026-09-05
+
+### Added
+
+- Compact proposal cards directly in the chat with Accept and Reject actions,
+  expandable details, pending feedback, and persistent decision status.
+- Existing proposals are matched to conversations using stored host bindings.
+  Reversal cards identify the exact canonical payment by amount, date, and purpose.
+- Paginated proposal history refreshes without gaps when new proposals arrive.
+
+### Changed
+
+- The assistant points to inline review instead of displaying internal proposal IDs
+  or directing the user to another view. Existing owner-only decisions, version
+  checks, transaction locks, and audit events remain authoritative.
+
 ## [0.6.1] - 2026-09-05
 
 ### Fixed
