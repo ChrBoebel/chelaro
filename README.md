@@ -256,7 +256,7 @@ pnpm quality
 Der Gate umfasst Repository-Sicherheitsprüfungen, Linting, Typprüfung, Tests, Produktions-Web-Build,
 Dependency-Audits sowie portable Prüfungen für Agent Host und Agent Storage. Die realen
 App-Server- und Isolationstests laufen wegen ihrer fest geprüften Plattformgrenze separat auf dem
-unterstützten macOS-15.6-Apple-Silicon-System:
+geprüften Apple-Silicon-Systemen mit macOS 15.6 oder 26.6.2:
 
 ```bash
 pnpm quality:agent:macos
