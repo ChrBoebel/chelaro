@@ -39,13 +39,15 @@ describe("DesktopUpdateButton", () => {
   it("guides the user from update notice to a verified manual DMG install", async () => {
     const harness = desktopBridge();
     window.financeOS = harness.bridge;
-    render(<DesktopUpdateButton />);
+    const { container } = render(<DesktopUpdateButton />);
 
     await waitFor(() => expect(harness.bridge.updates.getState).toHaveBeenCalledOnce());
     await harness.publish({ status: "available", version: "0.3.0" });
     fireEvent.click(screen.getByRole("button", { name: /Update 0.3.0 verfügbar/ }));
 
-    expect(screen.getByRole("dialog", { name: /Chelaro 0.3.0 ist verfügbar/ })).toBeTruthy();
+    const dialog = screen.getByRole("dialog", { name: /Chelaro 0.3.0 ist verfügbar/ });
+    expect(dialog).toBeTruthy();
+    expect(container.contains(dialog)).toBe(false);
     expect(screen.getByText(/Größe und SHA-256-Prüfsumme/)).toBeTruthy();
     expect(screen.getByText(/Deine lokalen Daten bleiben/)).toBeTruthy();
 

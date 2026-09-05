@@ -15,6 +15,8 @@ from finance_os_api.assistant_conversation_schemas import (
     AssistantConversationResource,
     AssistantConversationUpdate,
     AssistantMessageResource,
+    AssistantProposalPayment,
+    AssistantProposalResource,
     AssistantProviderRuntimeResource,
     AssistantTurnResource,
 )
@@ -26,8 +28,12 @@ from finance_os_api.domain.models import (
     AssistantMessage,
     AssistantProviderRuntime,
     AssistantTurn,
+    FinanceChangeProposal,
+    Receivable,
+    ReceivablePayment,
 )
 from finance_os_api.errors import ApiError
+from finance_os_api.services.personal_finance import finance_proposal_resource
 
 DEFAULT_TITLE = "Neue Unterhaltung"
 MAX_ASSISTANT_MESSAGE_BYTES = 512 * 1024
@@ -35,6 +41,65 @@ MAX_ASSISTANT_TURN_BYTES = 1024 * 1024
 
 
 class AssistantConversationService:
+    async def list_proposals(
+        self,
+        session: AsyncSession,
+        *,
+        conversation_id: UUID,
+        before_id: int | None,
+        limit: int,
+    ) -> tuple[list[AssistantProposalResource], int | None]:
+        conversation = await find_conversation(session, conversation_id)
+        # Correlation comes from persisted host bindings, never model-written IDs.
+        statement = (
+            select(FinanceChangeProposal, Receivable, AssistantTurn.public_id)
+            .join(
+                AssistantProviderRuntime,
+                AssistantProviderRuntime.provider_thread_id
+                == FinanceChangeProposal.provider_thread_id,
+            )
+            .outerjoin(Receivable, Receivable.id == FinanceChangeProposal.receivable_id)
+            .outerjoin(
+                AssistantTurn,
+                (AssistantTurn.conversation_id == conversation.id)
+                & (AssistantTurn.provider_turn_id == FinanceChangeProposal.provider_turn_id),
+            )
+            .where(AssistantProviderRuntime.conversation_id == conversation.id)
+            .order_by(FinanceChangeProposal.id.desc())
+            .limit(limit + 1)
+        )
+        if before_id is not None:
+            statement = statement.where(FinanceChangeProposal.id < before_id)
+        rows = (await session.execute(statement)).all()
+        payment_ids = {
+            UUID(str(proposal.payload_json["payment_id"]))
+            for proposal, _, _ in rows[:limit]
+            if proposal.action == "payment_reverse"
+        }
+        payments = {
+            (payment.receivable_id, str(payment.public_id)): AssistantProposalPayment(
+                amount=payment.amount, booked_on=payment.booked_on, purpose=payment.purpose,
+            )
+            for payment in (
+                await session.scalars(
+                    select(ReceivablePayment).where(ReceivablePayment.public_id.in_(payment_ids))
+                )
+            ).all()
+        } if payment_ids else {}
+        return [
+            AssistantProposalResource(
+                proposal=finance_proposal_resource(proposal, receivable),
+                turn_id=turn_id,
+                currency=(
+                    receivable.currency if receivable else str(proposal.payload_json["currency"])
+                ),
+                payment=payments.get((
+                    proposal.receivable_id, str(proposal.payload_json.get("payment_id")),
+                )),
+            )
+            for proposal, receivable, turn_id in rows[:limit]
+        ], rows[limit - 1][0].id if len(rows) > limit else None
+
     async def create(
         self,
         session: AsyncSession,

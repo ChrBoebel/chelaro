@@ -378,3 +378,111 @@ def completed_message(message_id: str, text: str) -> dict[str, str]:
         "sha256": sha256(text.encode()).hexdigest(),
         "text": text,
     }
+
+
+async def test_chat_proposals_use_persisted_bindings_and_owner_decisions(
+    clients: tuple[AsyncClient, AsyncClient, AsyncClient, Path],
+) -> None:
+    from uuid import uuid4
+
+    owner, agent, assistant, _database = clients
+    conversation = (await owner.post("/api/v1/assistant/conversations", json={})).json()["data"]
+    conversation_id = conversation["id"]
+    runtime_path = f"/api/v1/finance-assistant/conversations/{conversation_id}"
+    await assistant.put(f"{runtime_path}/runtime", json=runtime_binding("thread_cards"))
+    await assistant.post(f"{runtime_path}/turns", json={"turn_id": "turn_cards", "prompt": "Test"})
+    ids = []
+    for thread in ["unrelated_thread", "thread_cards", "thread_cards"]:
+        response = await assistant.post("/api/v1/finance-assistant/proposals", json={
+            "action": "receivable_create", "rationale": "Synthetischer Testvorschlag",
+            "receivable": {
+                "debtor_name": "Testperson", "original_amount": "12.34", "currency": "EUR",
+                "due_date": None, "description": "Synthetische Auslage",
+            },
+            "idempotency_key": str(uuid4()), "provider_thread_id": thread,
+            "provider_turn_id": "provider_cards", "provider_call_id": str(uuid4()),
+        })
+        assert response.status_code == 201
+        ids.append(response.json()["data"]["id"])
+    path = f"/api/v1/assistant/conversations/{conversation_id}/proposals"
+    for client in [agent, assistant]:
+        assert (await client.get(path)).status_code == 403
+        denied = await client.post(f"/api/v1/finance/change-proposals/{ids[1]}/approve")
+        assert denied.status_code == 403
+    running = (await owner.get(path)).json()
+    assert len(running["data"]) == 2
+    assert all(item["turn_id"] is None for item in running["data"])
+    assert (await owner.get("/api/v1/finance/receivables")).json()["data"] == []
+
+    answer = "Synthetischer Vorschlag erstellt."
+    completed = await assistant.post(f"{runtime_path}/turns/turn_cards/complete", json={
+        "provider_turn_id": "provider_cards",
+        "messages": [{"message_id": "answer_cards", "text": answer,
+                      "sha256": sha256(answer.encode()).hexdigest()}],
+    })
+    assert completed.status_code == 200
+    first = (await owner.get(f"{path}?limit=1")).json()
+    assert first["data"][0]["proposal"]["id"] == ids[2]
+    assert first["data"][0]["turn_id"] == "turn_cards"
+    assert first["data"][0]["currency"] == "EUR"
+    second = (await owner.get(f"{path}?limit=1&before_id={first['next_before_id']}")).json()
+    assert second["data"][0]["proposal"]["id"] == ids[1]
+    assert second["next_before_id"] is None
+    assert (await owner.get(f"{path}?limit=101")).status_code == 422
+    assert (await owner.get(f"{path}?before_id=0")).status_code == 422
+
+    for proposal_id, decision in zip(ids[1:], ["approve", "reject"], strict=True):
+        result = await owner.post(f"/api/v1/finance/change-proposals/{proposal_id}/{decision}")
+        assert result.status_code == 200
+    reloaded = (await owner.get(path)).json()["data"]
+    assert [item["proposal"]["status"] for item in reloaded] == ["rejected", "approved"]
+    assert len((await owner.get("/api/v1/finance/receivables")).json()["data"]) == 1
+    duplicate = await owner.post(f"/api/v1/finance/change-proposals/{ids[1]}/approve")
+    assert duplicate.status_code == 409
+    await owner.delete(f"/api/v1/assistant/conversations/{conversation_id}")
+    assert (await owner.get(path)).status_code == 404
+    assert len((await owner.get("/api/v1/finance/receivables")).json()["data"]) == 1
+
+
+async def test_chat_reversal_identifies_the_exact_canonical_payment(
+    clients: tuple[AsyncClient, AsyncClient, AsyncClient, Path],
+) -> None:
+    from uuid import uuid4
+
+    owner, _agent, assistant, _database = clients
+    conversation = (await owner.post("/api/v1/assistant/conversations", json={})).json()["data"]
+    await assistant.put(
+        f"/api/v1/finance-assistant/conversations/{conversation['id']}/runtime",
+        json=runtime_binding("thread_reversal_cards"),
+    )
+    receivable = (await owner.post("/api/v1/finance/receivables", json={
+        "debtor_name": "Synthetische Testperson", "original_amount": "100.00",
+        "currency": "EUR", "description": "Testforderung",
+    })).json()["data"]
+    for index, amount in enumerate(["10.00", "25.00"], start=1):
+        recorded = await owner.post(
+            f"/api/v1/finance/receivables/{receivable['id']}/payments",
+            json={"expected_version": receivable["version"], "amount": amount,
+                  "booked_on": f"2026-09-0{index}", "purpose": f"Testzahlung {index}",
+                  "payment_method": "cash"},
+        )
+        assert recorded.status_code == 201
+        receivable = recorded.json()["data"]
+    target = next(payment for payment in receivable["payments"] if payment["amount"] == "10.00")
+    proposed = await assistant.post("/api/v1/finance-assistant/proposals", json={
+        "action": "payment_reverse", "receivable_id": receivable["id"],
+        "expected_version": receivable["version"], "rationale": "Synthetische Korrektur",
+        "payment_id": target["id"], "reversal_reason": "Testkorrektur",
+        "idempotency_key": str(uuid4()), "provider_thread_id": "thread_reversal_cards",
+        "provider_turn_id": "provider_reversal", "provider_call_id": "call_reversal",
+    })
+    assert proposed.status_code == 201
+    listed = await owner.get(f"/api/v1/assistant/conversations/{conversation['id']}/proposals")
+    assert listed.status_code == 200
+    card = listed.json()["data"][0]
+    assert card["payment"] == {
+        "amount": "10.00", "booked_on": "2026-09-01", "purpose": "Testzahlung 1",
+    }
+    assert card["currency"] == "EUR"
+    unchanged = (await owner.get(f"/api/v1/finance/receivables/{receivable['id']}")).json()["data"]
+    assert all(payment["reversal"] is None for payment in unchanged["payments"])

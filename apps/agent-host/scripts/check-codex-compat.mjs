@@ -7,7 +7,7 @@
  * release agrees with those schemas everywhere Chelaro touches the protocol:
  *
  *   1. Strict surface -- every type Chelaro sends, validates, or answers must
- *      be byte-identical. A difference here is a real incompatibility.
+ *      be byte-identical, except for exact reviewed legacy deltas.
  *   2. Server-to-client unions -- the release may not offer a notification or
  *      request method the checked-in schemas do not describe, because an
  *      unknown method is one nobody classified against ADR 0010.
@@ -21,6 +21,7 @@
  *   node scripts/check-codex-compat.mjs                    # the pinned dependency
  *   node scripts/check-codex-compat.mjs --binary /path/to/codex
  */
+import { isReviewedLegacySurface } from "./codex-reviewed-legacy-surfaces.mjs";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -168,7 +169,7 @@ function main() {
       }
       const before = readFileSync(join(generatedRoot, file));
       const after = readFileSync(join(temporaryRoot, file));
-      if (!before.equals(after)) failures.push(`changes ${file}, which Chelaro sends or validates`);
+      if (!before.equals(after) && !isReviewedLegacySurface(runtime.version, file, before, after)) failures.push(`changes ${file}, which Chelaro sends or validates`);
     }
 
     for (const { label, ts } of UNION_SOURCES) {
@@ -215,7 +216,7 @@ function main() {
     return;
   }
   process.stdout.write(
-    `${subject} matches the checked-in Codex schemas on every surface Chelaro uses.\n`,
+    `${subject} matches every strict surface (including exact reviewed legacy deltas).\n`,
   );
 }
 

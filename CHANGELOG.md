@@ -11,6 +11,63 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.7.1] - 2026-09-05
+
+### Changed
+
+- Remove the redundant desktop breadcrumb bar and repetitive chat/sidebar hints.
+- Move theme switching and update access into the sidebar; enlarge the Chelaro
+  logo and wordmark while retaining compact mobile navigation.
+- Render update dialogs outside the sidebar so mobile transforms and keyboard
+  handling do not interfere with them.
+
+## [0.7.0] - 2026-09-05
+
+### Added
+
+- Compact proposal cards directly in the chat with Accept and Reject actions,
+  expandable details, pending feedback, and persistent decision status.
+- Existing proposals are matched to conversations using stored host bindings.
+  Reversal cards identify the exact canonical payment by amount, date, and purpose.
+- Paginated proposal history refreshes without gaps when new proposals arrive.
+
+### Changed
+
+- The assistant points to inline review instead of displaying internal proposal IDs
+  or directing the user to another view. Existing owner-only decisions, version
+  checks, transaction locks, and audit events remain authoritative.
+
+## [0.6.1] - 2026-09-05
+
+### Fixed
+
+- Accept the verified Codex CLI 0.153.3 with updated App Server schemas while
+  retaining 0.152.0 and 0.151.0 through exact reviewed legacy schema deltas.
+- Validate new thread model metadata and reject unsupported structured questions
+  on item and turn notification paths before completing an answer.
+- Update isolation evidence for macOS 26.6.2 arm64, including direct write denial
+  and rejection of restrictive nested Seatbelt profiles.
+
+## [0.6.0] - 2026-09-05
+
+### Changed
+
+- Rebuilt the assistant as a viewport-filling workspace inspired by BB: shared navigation and
+  searchable conversation history in the sidebar, a compact thread header, and a docked composer.
+- New conversations start with the first question. Model, reasoning depth, and Fast Mode live in
+  the composer; bound model settings remain visible while chatting.
+- Chat connections and per-conversation in-memory drafts survive navigation to other finance areas.
+- Assistant answers render Markdown tables and lists without executable HTML, local links, or remote
+  images. Scrolling follows new answers only while the reader stays near the end of the conversation.
+- Enter sends, Shift+Enter inserts a line break, and a follow-up can be drafted while an answer runs.
+  Mobile navigation uses a dismissible sidebar with keyboard focus management.
+
+### Fixed
+
+- Failed submissions keep the draft, duplicate submits cannot create duplicate conversations, and
+  changing conversations closes the previous session before displaying another history.
+- Failed streamed answers are hidden instead of remaining visible as if they were usable output.
+
 ## [0.5.2] - 2026-09-01
 
 ### Added

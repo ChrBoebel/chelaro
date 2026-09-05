@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import type { ServerNotification } from "../generated/codex/ts/ServerNotification.js";
+import type { ThreadItem } from "../generated/codex/ts/v2/ThreadItem.js";
 import type { JsonValue } from "../generated/codex/ts/serde_json/JsonValue.js";
 import {
   FinanceAgentService,
@@ -626,13 +627,14 @@ function agentMessage(text: string) {
     delivery: null,
     id: "provider_message_1",
     memoryCitation: null,
+    questions: null,
     phase: "final_answer" as const,
     text,
     type: "agentMessage" as const,
   };
 }
 
-function turn(id: string, status: "inProgress" | "completed", items: ReturnType<typeof agentMessage>[]) {
+function turn(id: string, status: "inProgress" | "completed", items: ThreadItem[]) {
   return {
     completedAt: status === "completed" ? 2 : null,
     durationMs: status === "completed" ? 1_000 : null,
@@ -643,4 +645,23 @@ function turn(id: string, status: "inProgress" | "completed", items: ReturnType<
     startedAt: 1,
     status,
   };
+}
+
+for (const method of ["item/started", "item/completed", "turn/started", "turn/completed"] as const) {
+  test(`finance agent service: ${method} rejects unsupported structured questions`, async (t) => {
+    const state = fixture();
+    t.after(async () => { await state.service.stop(); state.cleanup(); });
+    await readyService(state);
+    await state.service.startTurn("session_1", "turn_1", "Testfrage");
+    const item = { ...agentMessage("Testantwort"), questions: [{ title: "Unerwartete Rückfrage", options: ["Ja", "Nein"] }] };
+    const notifications: Record<typeof method, ServerNotification> = {
+      "item/started": { method: "item/started", params: { item, threadId: "provider_thread_1", turnId: "provider_turn_1", startedAtMs: 1 } },
+      "item/completed": { method: "item/completed", params: { item, threadId: "provider_thread_1", turnId: "provider_turn_1", completedAtMs: 2 } },
+      "turn/started": { method: "turn/started", params: { threadId: "provider_thread_1", turn: turn("provider_turn_1", "inProgress", [item]) } },
+      "turn/completed": { method: "turn/completed", params: { threadId: "provider_thread_1", turn: turn("provider_turn_1", "completed", [item]) } },
+    };
+    const notification = notifications[method];
+    assert.throws(() => state.process().notification(notification),
+      (error: unknown) => error instanceof FinanceAgentServiceError && error.code === "unsafe_codex_configuration");
+  });
 }
