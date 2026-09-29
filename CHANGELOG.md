@@ -19,6 +19,8 @@ All notable Chelaro changes are recorded here. The format follows
   their published version from the current source preview.
 - The desktop version test checks synchronized stable versions without requiring
   an obsolete hard-coded version for every subsequent source change.
+- Update Next.js and its ESLint configuration to 16.3.3 and refresh vulnerable
+  sharp, js-yaml and fast-uri dependencies. The high-severity dependency audit passes.
 
 ### Added
 
