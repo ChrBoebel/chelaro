@@ -11,6 +11,21 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.5.3] - 2026-09-29
+
+### Fixed
+
+- The README now links to the existing experimental macOS downloads and distinguishes
+  their published version from the current source preview.
+- The desktop version test checks synchronized stable versions without requiring
+  an obsolete hard-coded version for every subsequent source change.
+- Update Next.js and its ESLint configuration to 16.3.3 and refresh vulnerable
+  sharp, js-yaml and fast-uri dependencies. The high-severity dependency audit passes.
+
+### Added
+
+- A short, voluntary public feedback form linked from the README.
+
 ## [0.5.2] - 2026-09-01
 
 ### Added
