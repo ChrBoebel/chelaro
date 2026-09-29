@@ -17,6 +17,8 @@ All notable Chelaro changes are recorded here. The format follows
 
 - The README now links to the existing experimental macOS downloads and distinguishes
   their published version from the current source preview.
+- The desktop version test checks synchronized stable versions without requiring
+  an obsolete hard-coded version for every subsequent source change.
 
 ### Added
 

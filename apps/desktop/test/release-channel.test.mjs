@@ -72,7 +72,7 @@ test("GitHub publishes the DMG and checksum without Apple credentials", async ()
   );
 });
 
-test("the free update release uses one synchronized higher product version", async () => {
+test("product packages use one synchronized stable version", async () => {
   const packageFiles = [
     path.join(repositoryRoot, "package.json"),
     path.join(desktopRoot, "package.json"),
@@ -82,7 +82,9 @@ test("the free update release uses one synchronized higher product version", asy
     JSON.parse(await readFile(file, "utf8"))
   ));
 
-  assert.deepEqual(packages.map(({ version }) => version), ["0.5.2", "0.5.2", "0.5.2"]);
+  const versions = packages.map(({ version }) => version);
+  assert.match(versions[0], /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
+  assert.ok(versions.every((version) => version === versions[0]));
 });
 
 test("every pull request to main must increase the synchronized product version", async () => {
