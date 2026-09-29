@@ -11,6 +11,17 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.5.3] - 2026-09-29
+
+### Fixed
+
+- The README now links to the existing experimental macOS downloads and distinguishes
+  their published version from the current source preview.
+
+### Added
+
+- A short, voluntary public feedback form linked from the README.
+
 ## [0.5.2] - 2026-09-01
 
 ### Added
