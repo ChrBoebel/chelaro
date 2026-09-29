@@ -11,6 +11,15 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.5.4] - 2026-09-30
+
+### Fixed
+
+- Refresh the compatible undici 6, 7 and 8 dependencies used by desktop build
+  tools and jsdom, removing the remaining dependency advisories.
+- Update Vitest and its mocker to 4.1.11 to fix the development server's
+  redirect-mock path traversal advisory.
+
 ## [0.5.3] - 2026-09-29
 
 ### Fixed
