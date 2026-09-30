@@ -2,7 +2,7 @@ name: finance-os
 
 services:
   postgres:
-    image: postgres:17.11-alpine3.23@sha256:9ae4e8f8d0284836a505f0b2e825144e32e20499856e7dc5f7b99e19d10eedd6
+    image: postgres:17.11-alpine3.23@sha256:9ea644da56f1a82283b173fa38a316636fe7c538991a8ae41998cd3765434991
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${FINANCE_OS_POSTGRES_DB:?set FINANCE_OS_POSTGRES_DB in .env}
