@@ -1,0 +1,24 @@
+name: Rückmeldung aus der Nutzung
+description: Freiwillig berichten, was beim Ausprobieren funktioniert oder gefehlt hat
+title: "feedback: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Eine kurze Rückmeldung reicht. Sie ist freiwillig und öffentlich auf GitHub.
+        Bitte keine echten Finanzdaten, Belege, Namen oder Zugangsdaten einfügen.
+  - type: input
+    id: version
+    attributes:
+      label: Version oder Commit
+      description: App-Version oder Quellcode-Commit und Betriebssystem, soweit bekannt.
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Was hast du ausprobiert?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Was hat funktioniert, was hat gefehlt?

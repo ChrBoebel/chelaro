@@ -31,9 +31,10 @@ Finanzdaten entstehen erst durch deterministische Validierung oder eine bewusste
 
 > **Projektstatus:** Dies ist eine öffentliche, experimentelle Source Preview. Der Quellcode steht
 > unter der PolyForm Noncommercial License 1.0.0; kommerzielle Nutzung erfordert eine separate
-> schriftliche Lizenz. Das Repository ist **source-available und nicht Open Source**. Es gibt keine
-> ausschließlich experimentelle ad-hoc signierte Downloads und keine Apple Developer-ID-Builds, Support-
-> oder Produktionszusagen. Dieses
+> schriftliche Lizenz. Das Repository ist **source-available und nicht Open Source**. Es gibt
+> [experimentelle macOS-Downloads](https://github.com/ChrBoebel/chelaro/releases/latest) mit ad-hoc Signatur,
+> aber keine Apple Developer-ID-signierten oder notarisierten Builds und keine Support-
+> oder Produktionszusagen. Die Download-Version kann hinter dem aktuellen Quellcode liegen. Dieses
 > Repository ist die einzige aktive Chelaro-Codebasis; der Arbeitsablauf ist unter
 > [Repository Operations](docs/operations/REPOSITORY.md) dokumentiert.
 
@@ -276,6 +277,13 @@ pnpm quality:agent:macos
 - [Produktentscheidungen](docs/product/PRODUCT.md)
 - [REST-Zugriff für lokale Agents](docs/agents/REST_ACCESS.md)
 - [Architekturentscheidungen](docs/decisions/README.md)
+
+## Feedback aus der Nutzung
+
+Du kannst freiwillig über das [Feedback-Formular](https://github.com/ChrBoebel/chelaro/issues/new?template=feedback.yml)
+mitteilen, welchen Ablauf du ausprobiert hast und was dabei funktioniert oder
+gefehlt hat. Eine kurze Rückmeldung reicht; sie wird öffentlich auf GitHub sichtbar.
+Bitte keine echten Finanzdaten, Belege oder Zugangsdaten einfügen.
 
 ## Zusammenarbeit und Betrieb
 
