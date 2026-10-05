@@ -11,6 +11,15 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.5.7] - 2026-10-05
+
+### Changed
+
+- Allow the reviewed http-cache-semantics 4.3.0 security fix through release-age
+  checks so Dependabot can regenerate the lockfile.
+- Align web Node.js declarations with the supported Node 24 runtime and Vitest 5 peers.
+- Update Vitest to 5.0.3 and regenerate its dependency graph against the current web and desktop security fixes.
+
 ## [0.5.6] - 2026-10-05
 
 ### Changed
