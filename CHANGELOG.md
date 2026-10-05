@@ -11,6 +11,12 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.5.6] - 2026-10-05
+
+### Changed
+
+- Update Alembic to 1.20.0, FastAPI to 0.142.2, mypy to 2.4.0, PyInstaller to 6.22.3 and Ruff to 0.16.10, including their required transitive dependencies.
+
 ## [0.5.5] - 2026-10-05
 
 ### Changed
