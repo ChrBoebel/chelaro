@@ -11,6 +11,12 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.5.8] - 2026-10-05
+
+### Changed
+
+- Update the SHA-pinned pnpm/action-setup action to 6.1.0 and astral-sh/setup-uv to 10.2.0 in CI and desktop release workflows.
+
 ## [0.5.7] - 2026-10-05
 
 ### Changed
