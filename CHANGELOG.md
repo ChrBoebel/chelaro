@@ -11,6 +11,22 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.5.5] - 2026-10-05
+
+### Changed
+
+- Refresh the compatible web and desktop dependency group, including Next.js
+  16.3.8, React 19.3.0 and Electron 44.5.1. Keep Codex at the verified 0.152.0
+  protocol baseline; 0.160.0 requires a separate protocol migration.
+
+### Fixed
+
+- Update urllib3 to 2.8.0, brace-expansion within each existing major and
+  http-cache-semantics to 4.3.0 to resolve dependency advisories.
+- Bound nesting in the unpatched braces 3.0.3 development dependency. The audit
+  verifies the committed patch and installed behavior before accepting only the
+  exact mitigated ESLint dependency path; other high/critical findings still fail.
+
 ## [0.5.4] - 2026-09-30
 
 ### Fixed
