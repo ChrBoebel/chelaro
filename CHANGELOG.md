@@ -11,6 +11,12 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.5.9] - 2026-10-05
+
+### Changed
+
+- Refresh the immutable PostgreSQL 17.11-alpine3.23 image digest without changing the supported PostgreSQL major version.
+
 ## [0.5.8] - 2026-10-05
 
 ### Changed
