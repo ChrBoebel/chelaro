@@ -82,9 +82,9 @@ test("product packages use one synchronized stable version", async () => {
     JSON.parse(await readFile(file, "utf8"))
   ));
 
-  const versions = packages.map(({ version }) => version);
-  assert.match(versions[0], /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
-  assert.ok(versions.every((version) => version === versions[0]));
+  const version = packages[0].version;
+  assert.match(version, /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
+  assert.deepEqual(packages.map((entry) => entry.version), packageFiles.map(() => version));
 });
 
 test("every pull request to main must increase the synchronized product version", async () => {

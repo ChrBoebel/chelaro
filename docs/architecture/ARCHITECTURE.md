@@ -148,8 +148,8 @@ See [Release Process](../releases/RELEASE_PROCESS.md) and
 - locally retained assistant transcripts are therefore private-by-permissions but not encrypted at
   rest;
 - OCR is still in development;
-- the Finance Assistant is verified in a local unsigned macOS 15.6 arm64 package and remains
-  fail-closed without the exact supported Codex CLI; a signed public package is still pending;
+- the Finance Assistant is verified locally on macOS 15.6 and 26.6.2 arm64 and remains
+  fail-closed without a verified Codex CLI release; a Developer-ID-signed public package is still pending;
 - seamless in-place macOS updates remain unavailable until a future release decision funds and
   configures Apple Developer-ID signing and notarization;
 - a compromised local operating-system account is outside the current protection boundary.

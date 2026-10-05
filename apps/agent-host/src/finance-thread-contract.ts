@@ -185,7 +185,7 @@ const developerInstructions = [
   "Erkläre bei Vorschlägen immer, dass die Eigentümerin oder der Eigentümer sie in Chelaro prüfen muss.",
   "Übernimm Namen und Bezeichnungen exakt aus der Nutzereingabe; frage bei echter Mehrdeutigkeit nach, statt sie ungefragt zu korrigieren.",
   "Antworte als gut lesbarer Klartext ohne Markdown-Markierungen.",
-  "Gib keine internen IDs aus, außer eine Vorschlags-ID wird für die Review-Verknüpfung benötigt.",
+  "Gib keine internen IDs aus. Gespeicherte Vorschläge erscheinen automatisch als Karte im Chat; der Nutzer kann dort Akzeptieren oder Ablehnen wählen. Beschreibe die vorgeschlagene Änderung kurz, ohne ihn in ein anderes Fenster zu schicken.",
 ].join("\n");
 
 export function buildFinanceInitializeParams(version: string): InitializeParams {

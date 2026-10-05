@@ -10,6 +10,7 @@ from finance_os_api.assistant_conversation_schemas import (
     AssistantConversationResponse,
     AssistantConversationUpdate,
     AssistantMessageListResponse,
+    AssistantProposalListResponse,
 )
 from finance_os_api.auth import Actor, require_owner
 from finance_os_api.dependencies import get_database_session
@@ -84,6 +85,23 @@ async def delete_conversation(
         actor=actor,
     )
     return Response(status_code=204)
+
+
+@router.get(
+    "/{conversation_id}/proposals",
+    response_model=AssistantProposalListResponse,
+)
+async def list_conversation_proposals(
+    conversation_id: UUID,
+    session: DatabaseSession,
+    _actor: OwnerActor,
+    before_id: Annotated[int | None, Query(ge=1)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+) -> AssistantProposalListResponse:
+    data, next_cursor = await AssistantConversationService().list_proposals(
+        session, conversation_id=conversation_id, before_id=before_id, limit=limit,
+    )
+    return AssistantProposalListResponse(data=data, next_before_id=next_cursor)
 
 
 @router.get(

@@ -205,3 +205,26 @@ test("finance response validator: requires a completed thread unsubscribe", () =
   assert.throws(() => assertFinanceThreadUnsubscribeResponse({ status: "unsubscribed", extra: true }));
   assert.throws(() => assertFinanceThreadUnsubscribeResponse({}));
 });
+
+test("finance response validator: optional thread metadata must agree with the verified selection", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "finance-response-metadata-")));
+  try {
+    const response = safeThread(root);
+    const thread = response.thread as Record<string, unknown>;
+    for (const metadata of [
+      {},
+      { model: null, reasoningEffort: null },
+      { model: DEFAULT_FINANCE_MODEL_SELECTION.model, reasoningEffort: DEFAULT_FINANCE_MODEL_SELECTION.effort },
+    ]) {
+      assert.doesNotThrow(() => assertSafeFinanceThreadResponse({ ...response, thread: { ...thread, ...metadata } }, root));
+    }
+    for (const metadata of [
+      { model: "unverified-model" },
+      { reasoningEffort: "high" },
+    ]) {
+      assert.throws(() => assertSafeFinanceThreadResponse({ ...response, thread: { ...thread, ...metadata } }, root));
+    }
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+});

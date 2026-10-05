@@ -1,8 +1,11 @@
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Literal, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from finance_os_api.schemas import FinanceChangeProposalResource
 
 PUBLIC_ID_PATTERN = r"^[A-Za-z0-9_-]{1,128}$"
 SHA256_PATTERN = r"^[0-9a-f]{64}$"
@@ -70,6 +73,30 @@ class AssistantMessageListResponse(BaseModel):
 
     data: list[AssistantMessageResource]
     next_before_sequence: int | None
+
+
+class AssistantProposalPayment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    amount: Decimal
+    booked_on: date
+    purpose: str
+
+
+class AssistantProposalResource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    proposal: FinanceChangeProposalResource
+    turn_id: str | None
+    currency: str
+    payment: AssistantProposalPayment | None
+
+
+class AssistantProposalListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    data: list[AssistantProposalResource]
+    next_before_id: int | None
 
 
 PROVIDER_MODEL_PATTERN = r"^[A-Za-z0-9._-]{1,128}$"

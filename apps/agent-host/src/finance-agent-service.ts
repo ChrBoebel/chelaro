@@ -549,6 +549,7 @@ export class FinanceAgentService {
     switch (notification.method) {
       case "turn/started":
         assertProviderTurn(notification.params.threadId, notification.params.turn.id, session.providerThreadId, turn.providerTurnId);
+        notification.params.turn.items.forEach(assertAllowedThreadItem);
         return;
       case "item/agentMessage/delta":
         this.#requiredProjector().receiveDelta(notification.params);
@@ -568,6 +569,7 @@ export class FinanceAgentService {
         return;
       case "turn/completed": {
         assertProviderTurn(notification.params.threadId, notification.params.turn.id, session.providerThreadId, turn.providerTurnId);
+        notification.params.turn.items.forEach(assertAllowedThreadItem);
         const status = notification.params.turn.status;
         if (status === "inProgress") throw new FinanceAgentServiceError("protocol_incompatible");
         const projector = this.#projector;
@@ -856,7 +858,9 @@ function assertAllowedThreadItem(item: Parameters<FinanceAssistantStreamProjecto
   // `contextCompaction` carries no content of its own — it only marks that
   // Codex condensed the history to stay inside the context window, which a
   // long-lived conversation has to survive rather than treat as unsafe.
-  if (!["userMessage", "agentMessage", "reasoning", "dynamicToolCall", "contextCompaction"].includes(item.type)) {
+  // Structured questions need a dedicated reply flow; never silently drop them.
+  if ((item.type === "agentMessage" && (item.questions?.length ?? 0) > 0) ||
+    !["userMessage", "agentMessage", "reasoning", "dynamicToolCall", "contextCompaction"].includes(item.type)) {
     throw new FinanceAgentServiceError("unsafe_codex_configuration");
   }
 }

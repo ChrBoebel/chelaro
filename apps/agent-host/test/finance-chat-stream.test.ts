@@ -31,6 +31,7 @@ function completed(text: string, itemId = "provider_item_1") {
       delivery: null,
       id: itemId,
       memoryCitation: null,
+      questions: null,
       phase: "final_answer" as const,
       text,
       type: "agentMessage" as const,

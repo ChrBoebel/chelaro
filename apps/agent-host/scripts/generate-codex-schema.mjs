@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const generatedRoot = join(packageRoot, "generated", "codex");
 const codexEntry = join(packageRoot, "node_modules", "@openai", "codex", "bin", "codex.js");
+const pinnedVersion = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")).devDependencies["@openai/codex"];
 const codexPackagePath = join(packageRoot, "node_modules", "@openai", "codex", "package.json");
 const checkOnly = process.argv.includes("--check");
 
@@ -23,7 +24,7 @@ if (!existsSync(codexEntry) || !existsSync(codexPackagePath)) {
   throw new Error("Pinned @openai/codex dependency is missing; run pnpm install first.");
 }
 const codexPackage = JSON.parse(readFileSync(codexPackagePath, "utf8"));
-if (codexPackage.version !== "0.152.0" || codexPackage.license !== "Apache-2.0") {
+if (codexPackage.version !== pinnedVersion || codexPackage.license !== "Apache-2.0") {
   throw new Error("Unexpected @openai/codex version or license metadata.");
 }
 

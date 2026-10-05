@@ -3,7 +3,7 @@ import { accessSync, constants, realpathSync } from "node:fs";
 
 import { isSupportedCodexVersion } from "./codex-provider.js";
 
-export const SUPPORTED_MACOS_VERSION = "15.6";
+export const SUPPORTED_MACOS_VERSIONS: readonly string[] = Object.freeze(["15.6", "26.6.2"]);
 export const SUPPORTED_ARCHITECTURE = "arm64";
 
 export interface PlatformIdentity {
@@ -38,11 +38,11 @@ export function assertSupportedPlatform(identity = readPlatformIdentity()): void
   if (
     identity.platform !== "darwin" ||
     identity.architecture !== SUPPORTED_ARCHITECTURE ||
-    identity.macosVersion !== SUPPORTED_MACOS_VERSION
+    !SUPPORTED_MACOS_VERSIONS.includes(identity.macosVersion)
   ) {
     throw new Error(
       `Unsupported Codex isolation platform: ${identity.platform}/${identity.architecture}/${identity.macosVersion}; ` +
-        `expected darwin/${SUPPORTED_ARCHITECTURE}/${SUPPORTED_MACOS_VERSION}`,
+        `expected darwin/${SUPPORTED_ARCHITECTURE} on ${SUPPORTED_MACOS_VERSIONS.join(", ")}`,
     );
   }
 }

@@ -2,6 +2,9 @@
 
 Status: Accepted · 1 September 2026
 
+Updated by [ADR 0016](0016-codex-153-additive-protocol.md): Codex 0.153.3 and
+exact reviewed additive legacy schema deltas.
+
 ## Context
 
 ADR 0011 made the user's installed Codex CLI the production runtime and pinned compatibility to a

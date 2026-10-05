@@ -6,13 +6,14 @@ import { fileURLToPath } from "node:url";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const codexEntry = join(packageRoot, "node_modules", "@openai", "codex", "bin", "codex.js");
+const pinnedVersion = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")).devDependencies["@openai/codex"];
 const codexPackagePath = join(packageRoot, "node_modules", "@openai", "codex", "package.json");
 
 if (!existsSync(codexEntry) || !existsSync(codexPackagePath)) {
   throw new Error("Pinned @openai/codex dependency is missing; run pnpm install first.");
 }
 const metadata = JSON.parse(readFileSync(codexPackagePath, "utf8"));
-if (metadata.version !== "0.152.0") throw new Error("Unexpected Codex package version.");
+if (metadata.version !== pinnedVersion) throw new Error("Unexpected Codex package version.");
 
 const temporaryRoot = mkdtempSync(join(tmpdir(), "finance-os-codex-experimental-"));
 try {
