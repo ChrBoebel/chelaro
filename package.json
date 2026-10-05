@@ -1,6 +1,6 @@
 {
   "name": "finance-os",
-  "version": "0.5.2",
+  "version": "0.5.9",
   "private": true,
   "packageManager": "pnpm@10.32.1",
   "engines": {
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "audit:api": "uv run --project apps/api pip-audit",
-    "audit:web": "pnpm audit --audit-level high",
+    "audit:web": "node --test scripts/audit-web.test.mjs && node scripts/audit-web.mjs",
     "build:agent-host": "pnpm --filter @finance-os/agent-host build",
     "build:agent-storage": "pnpm --filter @finance-os/agent-storage build",
     "bootstrap:agent-tools": "node scripts/install-agent-tools.mjs",

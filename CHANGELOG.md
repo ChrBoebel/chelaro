@@ -11,6 +11,73 @@ All notable Chelaro changes are recorded here. The format follows
 - Secure local credential storage.
 - Reviewable OCR derivations.
 
+## [0.5.9] - 2026-10-05
+
+### Changed
+
+- Refresh the immutable PostgreSQL 17.11-alpine3.23 image digest without changing the supported PostgreSQL major version.
+
+## [0.5.8] - 2026-10-05
+
+### Changed
+
+- Update the SHA-pinned pnpm/action-setup action to 6.1.0 and astral-sh/setup-uv to 10.2.0 in CI and desktop release workflows.
+
+## [0.5.7] - 2026-10-05
+
+### Changed
+
+- Allow the reviewed http-cache-semantics 4.3.0 security fix through release-age
+  checks so Dependabot can regenerate the lockfile.
+- Align web Node.js declarations with the supported Node 24 runtime and Vitest 5 peers.
+- Update Vitest to 5.0.3 and regenerate its dependency graph against the current web and desktop security fixes.
+
+## [0.5.6] - 2026-10-05
+
+### Changed
+
+- Update Alembic to 1.20.0, FastAPI to 0.142.2, mypy to 2.4.0, PyInstaller to 6.22.3 and Ruff to 0.16.10, including their required transitive dependencies.
+
+## [0.5.5] - 2026-10-05
+
+### Changed
+
+- Refresh the compatible web and desktop dependency group, including Next.js
+  16.3.8, React 19.3.0 and Electron 44.5.1. Keep Codex at the verified 0.152.0
+  protocol baseline; 0.160.0 requires a separate protocol migration.
+
+### Fixed
+
+- Update urllib3 to 2.8.0, brace-expansion within each existing major and
+  http-cache-semantics to 4.3.0 to resolve dependency advisories.
+- Bound nesting in the unpatched braces 3.0.3 development dependency. The audit
+  verifies the committed patch and installed behavior before accepting only the
+  exact mitigated ESLint dependency path; other high/critical findings still fail.
+
+## [0.5.4] - 2026-09-30
+
+### Fixed
+
+- Refresh the compatible undici 6, 7 and 8 dependencies used by desktop build
+  tools and jsdom, removing the remaining dependency advisories.
+- Update Vitest and its mocker to 4.1.11 to fix the development server's
+  redirect-mock path traversal advisory.
+
+## [0.5.3] - 2026-09-29
+
+### Fixed
+
+- The README now links to the existing experimental macOS downloads and distinguishes
+  their published version from the current source preview.
+- The desktop version test checks synchronized stable versions without requiring
+  an obsolete hard-coded version for every subsequent source change.
+- Update Next.js and its ESLint configuration to 16.3.3 and refresh vulnerable
+  sharp, js-yaml and fast-uri dependencies. The high-severity dependency audit passes.
+
+### Added
+
+- A short, voluntary public feedback form linked from the README.
+
 ## [0.5.2] - 2026-09-01
 
 ### Added
